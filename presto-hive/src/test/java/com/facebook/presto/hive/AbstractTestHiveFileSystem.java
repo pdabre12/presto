@@ -187,7 +187,7 @@ public abstract class AbstractTestHiveFileSystem
 
         HiveCluster hiveCluster = new TestingHiveCluster(metastoreClientConfig, host, port);
         ExecutorService executor = newCachedThreadPool(daemonThreadsNamed("hive-%s"));
-        HivePartitionManager hivePartitionManager = new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER, config);
+        HivePartitionManager hivePartitionManager = new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(), config);
 
         HdfsConfiguration hdfsConfiguration = hdfsConfigurationProvider.apply(config, metastoreClientConfig);
 
@@ -207,7 +207,7 @@ public abstract class AbstractTestHiveFileSystem
                 hdfsEnvironment,
                 hivePartitionManager,
                 newDirectExecutorService(),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 locationService,
                 FUNCTION_RESOLUTION,
                 ROW_EXPRESSION_SERVICE,
@@ -234,7 +234,7 @@ public abstract class AbstractTestHiveFileSystem
                 hdfsEnvironment,
                 new CachingDirectoryLister(new HadoopDirectoryLister(), new HiveClientConfig()),
                 new BoundedExecutor(executor, config.getMaxSplitIteratorThreads()),
-                new HiveCoercionPolicy(FUNCTION_AND_TYPE_MANAGER),
+                new HiveCoercionPolicy(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver()),
                 new CounterStat(),
                 config.getMaxOutstandingSplits(),
                 config.getMaxOutstandingSplitsSize(),
@@ -251,7 +251,7 @@ public abstract class AbstractTestHiveFileSystem
                 PAGE_SORTER,
                 metastoreClient,
                 new GroupByHashPageIndexerFactory(new JoinCompiler(MetadataManager.createTestMetadataManager())),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 config,
                 metastoreClientConfig,
                 new SortingFileWriterConfig(),
@@ -274,7 +274,7 @@ public abstract class AbstractTestHiveFileSystem
                 getDefaultHiveBatchPageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveSelectivePageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveAggregatedPageSourceFactories(config, metastoreClientConfig),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 ROW_EXPRESSION_SERVICE);
     }
 

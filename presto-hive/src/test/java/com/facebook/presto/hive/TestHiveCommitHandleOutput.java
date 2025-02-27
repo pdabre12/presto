@@ -230,7 +230,7 @@ public class TestHiveCommitHandleOutput
         HiveMetadataFactory hiveMetadataFactory = new HiveMetadataFactory(
                 metastore,
                 hdfsEnvironment,
-                new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER, hiveClientConfig),
+                new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(), hiveClientConfig),
                 DateTimeZone.forOffsetHours(1),
                 true,
                 false,
@@ -241,7 +241,7 @@ public class TestHiveCommitHandleOutput
                 hiveClientConfig.getMaxPartitionsPerScan(),
                 false,
                 10_000,
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 new HiveLocationService(hdfsEnvironment),
                 FUNCTION_RESOLUTION,
                 ROW_EXPRESSION_SERVICE,

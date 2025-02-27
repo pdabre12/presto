@@ -60,7 +60,7 @@ public class TestDynamicFiltersChecker
         logicalRowExpressions = new LogicalRowExpressions(
                 new RowExpressionDeterminismEvaluator(metadata.getFunctionAndTypeManager()),
                 new FunctionResolution(metadata.getFunctionAndTypeManager().getFunctionAndTypeResolver()),
-                metadata.getFunctionAndTypeManager());
+                metadata.getFunctionAndTypeManager().getFunctionAndTypeResolver());
         builder = new PlanBuilder(getQueryRunner().getDefaultSession(), new PlanNodeIdAllocator(), metadata);
         ConnectorId connectorId = getCurrentConnectorId();
         TableHandle lineitemTableHandle = new TableHandle(

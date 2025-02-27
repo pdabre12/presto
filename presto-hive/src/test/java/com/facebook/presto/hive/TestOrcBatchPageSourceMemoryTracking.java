@@ -421,7 +421,7 @@ public class TestOrcBatchPageSourceMemoryTracking
 
                 ObjectInspector inspector = testColumn.getObjectInspector();
                 HiveType hiveType = HiveType.valueOf(inspector.getTypeName());
-                Type type = hiveType.getType(FUNCTION_AND_TYPE_MANAGER);
+                Type type = hiveType.getType(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver());
 
                 columnsBuilder.add(new HiveColumnHandle(testColumn.getName(), hiveType, type.getTypeSignature(), columnIndex, testColumn.isPartitionKey() ? PARTITION_KEY : REGULAR, Optional.empty(), Optional.empty()));
                 typesBuilder.add(type);
@@ -455,7 +455,7 @@ public class TestOrcBatchPageSourceMemoryTracking
                     0);
 
             OrcBatchPageSourceFactory orcPageSourceFactory = new OrcBatchPageSourceFactory(
-                    FUNCTION_AND_TYPE_MANAGER,
+                    FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                     false,
                     HDFS_ENVIRONMENT,
                     stats,
@@ -475,7 +475,7 @@ public class TestOrcBatchPageSourceMemoryTracking
                     ImmutableMap.of(),
                     partitionKeys,
                     DateTimeZone.UTC,
-                    FUNCTION_AND_TYPE_MANAGER,
+                    FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                     new SchemaTableName("schema", "table"),
                     ImmutableList.of(),
                     ImmutableList.of(),

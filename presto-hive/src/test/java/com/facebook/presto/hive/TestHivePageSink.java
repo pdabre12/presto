@@ -162,7 +162,7 @@ public class TestHivePageSink
         List<Type> columnTypes = columns.stream()
                 .map(LineItemColumn::getType)
                 .map(TestHivePageSink::getHiveType)
-                .map(hiveType -> hiveType.getType(FUNCTION_AND_TYPE_MANAGER))
+                .map(hiveType -> hiveType.getType(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver()))
                 .collect(toList());
 
         PageBuilder pageBuilder = new PageBuilder(columnTypes);
@@ -304,7 +304,7 @@ public class TestHivePageSink
                 getDefaultHiveBatchPageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveSelectivePageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveAggregatedPageSourceFactories(config, metastoreClientConfig),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 ROW_EXPRESSION_SERVICE);
         return provider.createPageSource(transaction, getSession(config, new HiveCommonClientConfig()), split, tableHandle.getLayout().get(), ImmutableList.copyOf(getColumnHandles()), NON_CACHEABLE, new RuntimeStats());
     }
@@ -335,7 +335,7 @@ public class TestHivePageSink
                 PAGE_SORTER,
                 metastore,
                 new GroupByHashPageIndexerFactory(new JoinCompiler(MetadataManager.createTestMetadataManager())),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 config,
                 metastoreClientConfig,
                 sortingFileWriterConfig,

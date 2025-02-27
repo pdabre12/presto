@@ -184,7 +184,7 @@ public class TestHiveBucketing
         Object[] nativeContainerValues = new Object[hiveValues.size()];
         for (int i = 0; i < hiveTypeStrings.size(); i++) {
             Object hiveValue = hiveValues.get(i);
-            Type type = hiveTypes.get(i).getType(FUNCTION_AND_TYPE_MANAGER);
+            Type type = hiveTypes.get(i).getType(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver());
 
             BlockBuilder blockBuilder = type.createBlockBuilder(null, 3);
             // prepend 2 nulls to make sure position is respected when HiveBucketing function

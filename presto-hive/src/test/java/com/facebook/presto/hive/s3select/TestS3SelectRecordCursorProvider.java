@@ -137,7 +137,7 @@ public class TestS3SelectRecordCursorProvider
                 columns,
                 effectivePredicate,
                 DateTimeZone.forID(SESSION.getSqlFunctionProperties().getTimeZoneKey().getId()),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 s3SelectPushdownEnabled);
     }
 

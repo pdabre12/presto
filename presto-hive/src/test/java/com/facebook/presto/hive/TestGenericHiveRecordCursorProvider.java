@@ -119,7 +119,7 @@ public class TestGenericHiveRecordCursorProvider
                 getAllColumns(),
                 TupleDomain.all(),
                 DateTimeZone.forID(SESSION.getSqlFunctionProperties().getTimeZoneKey().getId()),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 false);
     }
 

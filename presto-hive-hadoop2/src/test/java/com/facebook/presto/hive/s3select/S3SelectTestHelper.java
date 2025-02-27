@@ -136,7 +136,7 @@ public class S3SelectTestHelper
 
         HiveCluster hiveCluster = new TestingHiveCluster(metastoreClientConfig, host, port);
         executor = newCachedThreadPool(daemonThreadsNamed("hive-%s"));
-        HivePartitionManager hivePartitionManager = new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER, config);
+        HivePartitionManager hivePartitionManager = new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(), config);
 
         S3ConfigurationUpdater s3Config = new PrestoS3ConfigurationUpdater(new HiveS3Config()
                 .setS3AwsAccessKey(awsAccessKey)
@@ -159,7 +159,7 @@ public class S3SelectTestHelper
                 hdfsEnvironment,
                 hivePartitionManager,
                 newDirectExecutorService(),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 locationService,
                 FUNCTION_RESOLUTION,
                 ROW_EXPRESSION_SERVICE,
@@ -185,7 +185,7 @@ public class S3SelectTestHelper
                 hdfsEnvironment,
                 new CachingDirectoryLister(new HadoopDirectoryLister(), new HiveClientConfig()),
                 new BoundedExecutor(executor, config.getMaxSplitIteratorThreads()),
-                new HiveCoercionPolicy(FUNCTION_AND_TYPE_MANAGER),
+                new HiveCoercionPolicy(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver()),
                 new CounterStat(),
                 config.getMaxOutstandingSplits(),
                 config.getMaxOutstandingSplitsSize(),
@@ -203,7 +203,7 @@ public class S3SelectTestHelper
                 getDefaultHiveBatchPageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveSelectivePageSourceFactories(config, metastoreClientConfig),
                 getDefaultHiveAggregatedPageSourceFactories(config, metastoreClientConfig),
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 ROW_EXPRESSION_SERVICE);
     }
 

@@ -72,7 +72,7 @@ public class TestLogicalRowExpressions
     public void setup()
     {
         functionAndTypeManager = createTestFunctionAndTypeManager();
-        logicalRowExpressions = new LogicalRowExpressions(new RowExpressionDeterminismEvaluator(functionAndTypeManager), new FunctionResolution(functionAndTypeManager.getFunctionAndTypeResolver()), functionAndTypeManager);
+        logicalRowExpressions = new LogicalRowExpressions(new RowExpressionDeterminismEvaluator(functionAndTypeManager), new FunctionResolution(functionAndTypeManager.getFunctionAndTypeResolver()), functionAndTypeManager.getFunctionAndTypeResolver());
     }
 
     @Test

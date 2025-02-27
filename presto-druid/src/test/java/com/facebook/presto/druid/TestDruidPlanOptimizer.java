@@ -142,8 +142,8 @@ public class TestDruidPlanOptimizer
 
     private PlanNode getOptimizedPlan(PlanBuilder planBuilder, PlanNode originalPlan)
     {
-        DruidQueryGenerator druidQueryGenerator = new DruidQueryGenerator(functionAndTypeManager, functionAndTypeManager, standardFunctionResolution);
-        DruidPlanOptimizer optimizer = new DruidPlanOptimizer(druidQueryGenerator, functionAndTypeManager, new RowExpressionDeterminismEvaluator(functionAndTypeManager), functionAndTypeManager, standardFunctionResolution);
+        DruidQueryGenerator druidQueryGenerator = new DruidQueryGenerator(functionAndTypeManager.getFunctionAndTypeResolver(), functionAndTypeManager.getFunctionAndTypeResolver(), standardFunctionResolution);
+        DruidPlanOptimizer optimizer = new DruidPlanOptimizer(druidQueryGenerator, functionAndTypeManager.getFunctionAndTypeResolver(), new RowExpressionDeterminismEvaluator(functionAndTypeManager), functionAndTypeManager.getFunctionAndTypeResolver(), standardFunctionResolution);
         return optimizer.optimize(originalPlan, defaultSessionHolder.getConnectorSession(), new VariableAllocator(), planBuilder.getIdAllocator());
     }
 

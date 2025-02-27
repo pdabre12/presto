@@ -111,7 +111,7 @@ public class TestHiveMetadataFileFormatEncryptionSettings
         metadataFactory = new HiveMetadataFactory(
                 metastore,
                 HDFS_ENVIRONMENT,
-                new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER, HIVE_CLIENT_CONFIG),
+                new HivePartitionManager(FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(), HIVE_CLIENT_CONFIG),
                 DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of(HIVE_CLIENT_CONFIG.getTimeZone()))),
                 true,
                 false,
@@ -122,7 +122,7 @@ public class TestHiveMetadataFileFormatEncryptionSettings
                 HIVE_CLIENT_CONFIG.getMaxPartitionsPerScan(),
                 false,
                 10_000,
-                FUNCTION_AND_TYPE_MANAGER,
+                FUNCTION_AND_TYPE_MANAGER.getFunctionAndTypeResolver(),
                 new HiveLocationService(HDFS_ENVIRONMENT),
                 FUNCTION_RESOLUTION,
                 ROW_EXPRESSION_SERVICE,
