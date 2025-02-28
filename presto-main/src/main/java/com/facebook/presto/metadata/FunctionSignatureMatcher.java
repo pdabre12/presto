@@ -19,6 +19,7 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.function.FunctionKind;
 import com.facebook.presto.spi.function.Signature;
 import com.facebook.presto.spi.function.SqlFunction;
+import com.facebook.presto.sql.analyzer.SemanticException;
 import com.facebook.presto.sql.analyzer.TypeSignatureProvider;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -126,10 +127,12 @@ public final class FunctionSignatureMatcher
         ImmutableList.Builder<ApplicableFunction> applicableFunctions = ImmutableList.builder();
         for (SqlFunction function : candidates) {
             Signature declaredSignature = function.getSignature();
-            Optional<Signature> boundSignature = new SignatureBinder(functionAndTypeManager, declaredSignature, allowCoercion)
-                    .bind(actualParameters);
-            if (boundSignature.isPresent()) {
-                applicableFunctions.add(new ApplicableFunction(declaredSignature, boundSignature.get(), function.isCalledOnNullInput()));
+            try {
+                Optional<Signature> boundSignature = new SignatureBinder(functionAndTypeManager, declaredSignature, allowCoercion)
+                        .bind(actualParameters);
+                boundSignature.ifPresent(signature -> applicableFunctions.add(new ApplicableFunction(declaredSignature, signature, function.isCalledOnNullInput())));
+            }
+            catch (SemanticException ignored) {
             }
         }
         return applicableFunctions.build();
