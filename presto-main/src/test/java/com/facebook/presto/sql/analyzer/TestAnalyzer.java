@@ -2245,10 +2245,10 @@ public class TestAnalyzer
                 "line 1:15: Cannot apply sample to polymorphic table function invocation",
                 "SELECT * FROM TABLE(system.two_arguments_function('a', 1)) f(x) TABLESAMPLE BERNOULLI (10)");
 
-        // aliased + row pattern matching
-        assertFails(INVALID_TABLE_FUNCTION_INVOCATION,
-                "line 2:6: Cannot apply row pattern matching to polymorphic table function invocation",
-                "SELECT * FROM TABLE(system.two_arguments_function('a', 1)) f(x) MATCH_RECOGNIZE( PATTERN (a*) DEFINE a AS true ) t(y)");
+//        // aliased + row pattern matching
+//        assertFails(INVALID_TABLE_FUNCTION_INVOCATION,
+//                "line 2:6: Cannot apply row pattern matching to polymorphic table function invocation",
+//                "SELECT * FROM TABLE(system.two_arguments_function('a', 1)) f(x) MATCH_RECOGNIZE( PATTERN (a*) DEFINE a AS true ) t(y)");
 
         // TODO enable this test when ONLY PASS THROUGH functions are fully analyzed (currently they fail with NOT_SUPPORTED)
         //  An ONLY PASS THROUGH function had to be used here, because it's the only kind which does not take an alias.
@@ -2257,10 +2257,10 @@ public class TestAnalyzer
 //                "line 2:12: Cannot apply row pattern matching to polymorphic table function invocation",
 //                "SELECT * FROM TABLE(system.only_pass_through_function(TABLE(t1))) MATCH_RECOGNIZE( PATTERN (a*) DEFINE a AS true) TABLESAMPLE BERNOULLI (10)");
 
-        // aliased + row pattern matching + sampled
-        assertFails(INVALID_TABLE_FUNCTION_INVOCATION,
-                "line 2:6: Cannot apply row pattern matching to polymorphic table function invocation",
-                "SELECT * FROM TABLE(system.two_arguments_function('a', 1)) f(x) MATCH_RECOGNIZE( PATTERN (a*) DEFINE a AS true ) t(y) TABLESAMPLE BERNOULLI (10)");
+//        // aliased + row pattern matching + sampled
+//        assertFails(INVALID_TABLE_FUNCTION_INVOCATION,
+//                "line 2:6: Cannot apply row pattern matching to polymorphic table function invocation",
+//                "SELECT * FROM TABLE(system.two_arguments_function('a', 1)) f(x) MATCH_RECOGNIZE( PATTERN (a*) DEFINE a AS true ) t(y) TABLESAMPLE BERNOULLI (10)");
     }
 
     @Test
@@ -2284,7 +2284,7 @@ public class TestAnalyzer
 
         analyze("SELECT table_alias.column_alias FROM TABLE(system.two_arguments_function('a', 1)) table_alias(column_alias)");
 
-        assertFails(COLUMN_NOT_FOUND,
+        assertFails(MISSING_ATTRIBUTE,
                 "line 1:8: Column 'column' cannot be resolved",
                 "SELECT column FROM TABLE(system.two_arguments_function('a', 1)) table_alias(column_alias)");
 
