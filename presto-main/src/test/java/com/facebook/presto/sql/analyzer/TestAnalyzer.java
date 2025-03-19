@@ -2306,12 +2306,11 @@ public class TestAnalyzer
         analyze("SELECT table_alias.x, arg_alias.a, arg_alias.b, arg_alias.c, arg_alias.d FROM TABLE(system.pass_through_function(TABLE(t1) arg_alias)) table_alias");
 
         assertFails(MISSING_ATTRIBUTE,
-                "line 1:23: Column 't1.a' cannot be resolved",
+                "line 1:23: 't1.a' cannot be resolved",
                 "SELECT table_alias.x, t1.a FROM TABLE(system.pass_through_function(TABLE(t1) arg_alias)) table_alias");
 
         assertFails(MISSING_ATTRIBUTE,
-                "line 1:23: Column 'table_alias.a' cannot be resolved",
+                "line 1:23: 'table_alias.a' cannot be resolved",
                 "SELECT table_alias.x, table_alias.a FROM TABLE(system.pass_through_function(TABLE(t1))) table_alias");
     }
-
 }

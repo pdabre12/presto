@@ -2228,7 +2228,7 @@ class StatementAnalyzer
             // special-handle table function invocation
             if (relation.getRelation() instanceof TableFunctionInvocation) {
                 return createAndAssignScope(relation, scope,
-                        aliasTableFunctionInvocation(relation, relationType, (TableFunctionInvocation)relation.getRelation()));
+                        aliasTableFunctionInvocation(relation, relationType, (TableFunctionInvocation) relation.getRelation()));
             }
 
             // todo this check should be inside of TupleDescriptor.withAlias, but the exception needs the node object
@@ -2389,11 +2389,11 @@ class StatementAnalyzer
         {
             TableFunctionInvocation tableFunctionInvocation = null;
             if (base instanceof TableFunctionInvocation) {
-                tableFunctionInvocation = (TableFunctionInvocation)base;
+                tableFunctionInvocation = (TableFunctionInvocation) base;
             }
-            else if (base instanceof AliasedRelation  &&
-                    ((AliasedRelation)base).getRelation() instanceof TableFunctionInvocation) {
-                tableFunctionInvocation = (TableFunctionInvocation) ((AliasedRelation)base).getRelation();
+            else if (base instanceof AliasedRelation &&
+                    ((AliasedRelation) base).getRelation() instanceof TableFunctionInvocation) {
+                tableFunctionInvocation = (TableFunctionInvocation) ((AliasedRelation) base).getRelation();
             }
             if (tableFunctionInvocation != null && analysis.isPolymorphicTableFunction(tableFunctionInvocation)) {
                 throw new SemanticException(INVALID_TABLE_FUNCTION_INVOCATION, base, "Cannot apply %s to polymorphic table function invocation", context);
