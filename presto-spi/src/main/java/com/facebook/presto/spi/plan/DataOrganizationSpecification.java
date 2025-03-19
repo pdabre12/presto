@@ -28,7 +28,7 @@ import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 
 @Immutable
-public class  DataOrganizationSpecification
+public class DataOrganizationSpecification
 {
     private final List<VariableReferenceExpression> partitionBy;
     private final Optional<OrderingScheme> orderingScheme;
