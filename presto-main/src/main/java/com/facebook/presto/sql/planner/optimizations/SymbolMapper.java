@@ -335,7 +335,7 @@ public class SymbolMapper
         return builder.build();
     }
 
-    private List<VariableReferenceExpression> mapAndDistinctVariable(List<VariableReferenceExpression> outputs)
+    List<VariableReferenceExpression> mapAndDistinctVariable(List<VariableReferenceExpression> outputs)
     {
         Set<VariableReferenceExpression> added = new HashSet<>();
         ImmutableList.Builder<VariableReferenceExpression> builder = ImmutableList.builder();

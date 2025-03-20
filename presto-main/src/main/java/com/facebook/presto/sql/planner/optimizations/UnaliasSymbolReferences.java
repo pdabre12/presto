@@ -82,10 +82,12 @@ import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -140,7 +142,7 @@ public class UnaliasSymbolReferences
     }
 
     private static class Rewriter
-            extends SimplePlanRewriter<Void>
+            extends SimplePlanRewriter<UnaliasContext>
     {
         private final Map<String, String> mapping = new HashMap<>();
         private final TypeProvider types;
@@ -158,7 +160,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitAggregation(AggregationNode node, RewriteContext<Void> context)
+        public PlanNode visitAggregation(AggregationNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             //TODO: use mapper in other methods
@@ -167,26 +169,26 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitCteReference(CteReferenceNode node, RewriteContext<Void> context)
+        public PlanNode visitCteReference(CteReferenceNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             return new CteReferenceNode(node.getSourceLocation(), node.getId(), source, node.getCteId());
         }
 
-        public PlanNode visitCteProducer(CteProducerNode node, RewriteContext<Void> context)
+        public PlanNode visitCteProducer(CteProducerNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             List<VariableReferenceExpression> canonical = Lists.transform(node.getOutputVariables(), this::canonicalize);
             return new CteProducerNode(node.getSourceLocation(), node.getId(), source, node.getCteId(), node.getRowCountVariable(), canonical);
         }
 
-        public PlanNode visitCteConsumer(CteConsumerNode node, RewriteContext<Void> context)
+        public PlanNode visitCteConsumer(CteConsumerNode node, RewriteContext<UnaliasContext> context)
         {
             // No rewrite on source by cte consumer
             return node;
         }
 
-        public PlanNode visitSequence(SequenceNode node, RewriteContext<Void> context)
+        public PlanNode visitSequence(SequenceNode node, RewriteContext<UnaliasContext> context)
         {
             List<PlanNode> cteProducers = node.getCteProducers().stream().map(c ->
                             SimplePlanRewriter.rewriteWith(new Rewriter(types, functionAndTypeManager, warningCollector), c))
@@ -196,7 +198,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitGroupId(GroupIdNode node, RewriteContext<Void> context)
+        public PlanNode visitGroupId(GroupIdNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -216,21 +218,21 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitExplainAnalyze(ExplainAnalyzeNode node, RewriteContext<Void> context)
+        public PlanNode visitExplainAnalyze(ExplainAnalyzeNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             return new ExplainAnalyzeNode(node.getSourceLocation(), node.getId(), source, canonicalize(node.getOutputVariable()), node.isVerbose(), node.getFormat());
         }
 
         @Override
-        public PlanNode visitMarkDistinct(MarkDistinctNode node, RewriteContext<Void> context)
+        public PlanNode visitMarkDistinct(MarkDistinctNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             return new MarkDistinctNode(node.getSourceLocation(), node.getId(), source, canonicalize(node.getMarkerVariable()), canonicalizeAndDistinct(node.getDistinctVariables()), canonicalize(node.getHashVariable()));
         }
 
         @Override
-        public PlanNode visitUnnest(UnnestNode node, RewriteContext<Void> context)
+        public PlanNode visitUnnest(UnnestNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             ImmutableMap.Builder<VariableReferenceExpression, List<VariableReferenceExpression>> builder = ImmutableMap.builder();
@@ -241,7 +243,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitWindow(WindowNode node, RewriteContext<Void> context)
+        public PlanNode visitWindow(WindowNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -301,13 +303,13 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitTableScan(TableScanNode node, RewriteContext<Void> context)
+        public PlanNode visitTableScan(TableScanNode node, RewriteContext<UnaliasContext> context)
         {
             return node;
         }
 
         @Override
-        public PlanNode visitExchange(ExchangeNode node, RewriteContext<Void> context)
+        public PlanNode visitExchange(ExchangeNode node, RewriteContext<UnaliasContext> context)
         {
             List<PlanNode> sources = node.getSources().stream()
                     .map(context::rewrite)
@@ -393,7 +395,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitRemoteSource(RemoteSourceNode node, RewriteContext<Void> context)
+        public PlanNode visitRemoteSource(RemoteSourceNode node, RewriteContext<UnaliasContext> context)
         {
             return new RemoteSourceNode(
                     node.getSourceLocation(),
@@ -408,31 +410,31 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitOffset(OffsetNode node, RewriteContext<Void> context)
+        public PlanNode visitOffset(OffsetNode node, RewriteContext<UnaliasContext> context)
         {
             return context.defaultRewrite(node);
         }
 
         @Override
-        public PlanNode visitLimit(LimitNode node, RewriteContext<Void> context)
+        public PlanNode visitLimit(LimitNode node, RewriteContext<UnaliasContext> context)
         {
             return context.defaultRewrite(node);
         }
 
         @Override
-        public PlanNode visitDistinctLimit(DistinctLimitNode node, RewriteContext<Void> context)
+        public PlanNode visitDistinctLimit(DistinctLimitNode node, RewriteContext<UnaliasContext> context)
         {
             return new DistinctLimitNode(node.getSourceLocation(), node.getId(), context.rewrite(node.getSource()), node.getLimit(), node.isPartial(), canonicalizeAndDistinct(node.getDistinctVariables()), canonicalize(node.getHashVariable()), node.getTimeoutMillis());
         }
 
         @Override
-        public PlanNode visitSample(SampleNode node, RewriteContext<Void> context)
+        public PlanNode visitSample(SampleNode node, RewriteContext<UnaliasContext> context)
         {
             return new SampleNode(node.getSourceLocation(), node.getId(), context.rewrite(node.getSource()), node.getSampleRatio(), node.getSampleType());
         }
 
         @Override
-        public PlanNode visitValues(ValuesNode node, RewriteContext<Void> context)
+        public PlanNode visitValues(ValuesNode node, RewriteContext<UnaliasContext> context)
         {
             List<List<RowExpression>> canonicalizedRows = node.getRows().stream()
                     .map(rowExpressions -> rowExpressions.stream()
@@ -450,19 +452,19 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitDelete(DeleteNode node, RewriteContext<Void> context)
+        public PlanNode visitDelete(DeleteNode node, RewriteContext<UnaliasContext> context)
         {
             return new DeleteNode(node.getSourceLocation(), node.getId(), context.rewrite(node.getSource()), canonicalize(node.getRowId()), node.getOutputVariables(), node.getInputDistribution());
         }
 
         @Override
-        public PlanNode visitUpdate(UpdateNode node, RewriteContext<Void> context)
+        public PlanNode visitUpdate(UpdateNode node, RewriteContext<UnaliasContext> context)
         {
             return new UpdateNode(node.getSourceLocation(), node.getId(), node.getSource(), canonicalize(node.getRowId()), node.getColumnValueAndRowIdSymbols(), node.getOutputVariables());
         }
 
         @Override
-        public PlanNode visitStatisticsWriterNode(StatisticsWriterNode node, RewriteContext<Void> context)
+        public PlanNode visitStatisticsWriterNode(StatisticsWriterNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             SymbolMapper mapper = new SymbolMapper(mapping, types, warningCollector);
@@ -470,64 +472,98 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitTableFinish(TableFinishNode node, RewriteContext<Void> context)
+        public PlanNode visitTableFinish(TableFinishNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             SymbolMapper mapper = new SymbolMapper(mapping, types, warningCollector);
             return mapper.map(node, source);
         }
 
-        @Override
-        public PlanAndMappings visitTableFunction(TableFunctionNode node, UnaliasContext context)
-        {
-            Map<Symbol, Symbol> mapping = new HashMap<>(context.getCorrelationMapping());
-            SymbolMapper mapper = symbolMapper(mapping);
 
-            List<Symbol> newProperOutputs = mapper.map(node.getProperOutputs());
+        @Override
+        public PlanNode visitTableFunction(TableFunctionNode node, RewriteContext<UnaliasContext> context)
+        {
+            Map<VariableReferenceExpression, VariableReferenceExpression> mappings = new HashMap<>(context.get().getCorrelationMapping());
+            SymbolMapper mapper = new SymbolMapper(mappings, warningCollector);
+
+            List<VariableReferenceExpression> newProperOutputs = node.getOutputVariables().stream()
+                    .map(mapper::map).
+                    collect(toImmutableList());
 
             ImmutableList.Builder<PlanNode> newSources = ImmutableList.builder();
-            ImmutableList.Builder<TableArgumentProperties> newTableArgumentProperties = ImmutableList.builder();
+            ImmutableList.Builder<TableFunctionNode.TableArgumentProperties> newTableArgumentProperties = ImmutableList.builder();
 
             for (int i = 0; i < node.getSources().size(); i++) {
-                PlanAndMappings newSource = node.getSources().get(i).accept(this, context);
-                newSources.add(newSource.getRoot());
+                PlanNode newSource = node.getSources().get(i).accept(this, context);
+                newSources.add(newSource);
 
-                SymbolMapper inputMapper = symbolMapper(new HashMap<>(newSource.getMappings()));
-                TableArgumentProperties properties = node.getTableArgumentProperties().get(i);
-                ImmutableMultimap.Builder<String, Symbol> newColumnMapping = ImmutableMultimap.builder();
+
+                SymbolMapper inputMapper = new SymbolMapper(((PlanAndMappings)newSource).getMappings(), warningCollector);
+                TableFunctionNode.TableArgumentProperties properties = node.getTableArgumentProperties().get(i);
+                ImmutableMultimap.Builder<String, VariableReferenceExpression> newColumnMapping = ImmutableMultimap.builder();
                 properties.getColumnMapping().entries().stream()
                         .forEach(entry -> newColumnMapping.put(entry.getKey(), inputMapper.map(entry.getValue())));
-                Optional<DataOrganizationSpecification> newSpecification = properties.getSpecification().map(inputMapper::mapAndDistinct);
-                newTableArgumentProperties.add(new TableArgumentProperties(
+                Optional<DataOrganizationSpecification> newSpecification = Optional.of(new DataOrganizationSpecification(
+                        inputMapper.mapAndDistinctVariable(properties.specification().get().getPartitionBy()),
+                        Optional.of(inputMapper.map(properties.specification().get().getOrderingScheme().get()))
+                ));
+                newTableArgumentProperties.add(new TableFunctionNode.TableArgumentProperties(
                         properties.getArgumentName(),
                         newColumnMapping.build(),
-                        properties.isRowSemantics(),
-                        properties.isPruneWhenEmpty(),
-                        properties.isPassThroughColumns(),
+                        properties.rowSemantics(),
+                        properties.pruneWhenEmpty(),
+                        properties.passThroughColumns(),
                         newSpecification));
             }
 
+            TableFunctionNode tableFunctionNode = new TableFunctionNode(
+                    node.getId(),
+                    node.getName(),
+                    node.getArguments(),
+                    newProperOutputs,
+                    newSources.build(),
+                    newTableArgumentProperties.build(),
+                    node.getCopartitioningLists(),
+                    node.getHandle());
+
             return new PlanAndMappings(
-                    new TableFunctionNode(
-                            node.getId(),
-                            node.getName(),
-                            node.getArguments(),
-                            newProperOutputs,
-                            newSources.build(),
-                            newTableArgumentProperties.build(),
-                            node.getCopartitioningLists(),
-                            node.getHandle()),
-                    mapping);
+                    tableFunctionNode,
+                    mappings)
+            {
+                @Override
+                public List<PlanNode> getSources()
+                {
+                    return tableFunctionNode.getSources();
+                }
+
+                @Override
+                public List<VariableReferenceExpression> getOutputVariables()
+                {
+                    return tableFunctionNode.getOutputVariables();
+                }
+
+                @Override
+                public PlanNode replaceChildren(List<PlanNode> newChildren)
+                {
+                    return tableFunctionNode.replaceChildren(newChildren);
+                }
+
+                @Override
+                public PlanNode assignStatsEquivalentPlanNode(Optional<PlanNode> statsEquivalentPlanNode)
+                {
+                    return tableFunctionNode.assignStatsEquivalentPlanNode(statsEquivalentPlanNode);
+                }
+            };
         }
 
         @Override
-        public PlanNode visitRowNumber(RowNumberNode node, RewriteContext<Void> context)
+        public PlanNode visitRowNumber(RowNumberNode node, RewriteContext<UnaliasContext> context)
         {
             return new RowNumberNode(node.getSourceLocation(), node.getId(), context.rewrite(node.getSource()), canonicalizeAndDistinct(node.getPartitionBy()), canonicalize(node.getRowNumberVariable()), node.getMaxRowCountPerPartition(), node.isPartial(), canonicalize(node.getHashVariable()));
         }
 
         @Override
-        public PlanNode visitTopNRowNumber(TopNRowNumberNode node, RewriteContext<Void> context)
+        public PlanNode visitTopNRowNumber(TopNRowNumberNode node, RewriteContext<UnaliasContext> context)
         {
             return new TopNRowNumberNode(
                     node.getSourceLocation(),
@@ -541,7 +577,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitFilter(FilterNode node, RewriteContext<Void> context)
+        public PlanNode visitFilter(FilterNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -549,14 +585,14 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitProject(ProjectNode node, RewriteContext<Void> context)
+        public PlanNode visitProject(ProjectNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             return new ProjectNode(node.getSourceLocation(), node.getId(), source, canonicalize(node.getAssignments()), node.getLocality());
         }
 
         @Override
-        public PlanNode visitOutput(OutputNode node, RewriteContext<Void> context)
+        public PlanNode visitOutput(OutputNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -565,7 +601,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitEnforceSingleRow(EnforceSingleRowNode node, RewriteContext<Void> context)
+        public PlanNode visitEnforceSingleRow(EnforceSingleRowNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -573,7 +609,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitAssignUniqueId(AssignUniqueId node, RewriteContext<Void> context)
+        public PlanNode visitAssignUniqueId(AssignUniqueId node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -581,7 +617,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitApply(ApplyNode node, RewriteContext<Void> context)
+        public PlanNode visitApply(ApplyNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getInput());
             PlanNode subquery = context.rewrite(node.getSubquery());
@@ -593,7 +629,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitLateralJoin(LateralJoinNode node, RewriteContext<Void> context)
+        public PlanNode visitLateralJoin(LateralJoinNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getInput());
             PlanNode subquery = context.rewrite(node.getSubquery());
@@ -603,7 +639,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitTopN(TopNNode node, RewriteContext<Void> context)
+        public PlanNode visitTopN(TopNNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -612,7 +648,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitSort(SortNode node, RewriteContext<Void> context)
+        public PlanNode visitSort(SortNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
 
@@ -620,7 +656,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitJoin(JoinNode node, RewriteContext<Void> context)
+        public PlanNode visitJoin(JoinNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode left = context.rewrite(node.getLeft());
             PlanNode right = context.rewrite(node.getRight());
@@ -655,7 +691,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitSemiJoin(SemiJoinNode node, RewriteContext<Void> context)
+        public PlanNode visitSemiJoin(SemiJoinNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             PlanNode filteringSource = context.rewrite(node.getFilteringSource());
@@ -675,7 +711,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitSpatialJoin(SpatialJoinNode node, RewriteContext<Void> context)
+        public PlanNode visitSpatialJoin(SpatialJoinNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode left = context.rewrite(node.getLeft());
             PlanNode right = context.rewrite(node.getRight());
@@ -684,13 +720,13 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitIndexSource(IndexSourceNode node, RewriteContext<Void> context)
+        public PlanNode visitIndexSource(IndexSourceNode node, RewriteContext<UnaliasContext> context)
         {
             return new IndexSourceNode(node.getSourceLocation(), node.getId(), node.getIndexHandle(), node.getTableHandle(), canonicalize(node.getLookupVariables()), node.getOutputVariables(), node.getAssignments(), node.getCurrentConstraint());
         }
 
         @Override
-        public PlanNode visitIndexJoin(IndexJoinNode node, RewriteContext<Void> context)
+        public PlanNode visitIndexJoin(IndexJoinNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode probeSource = context.rewrite(node.getProbeSource());
             PlanNode indexSource = context.rewrite(node.getIndexSource());
@@ -699,24 +735,24 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitUnion(UnionNode node, RewriteContext<Void> context)
+        public PlanNode visitUnion(UnionNode node, RewriteContext<UnaliasContext> context)
         {
             return new UnionNode(node.getSourceLocation(), node.getId(), rewriteSources(node, context).build(), canonicalizeSetOperationOutputVariables(node.getOutputVariables()), canonicalizeSetOperationVariableMap(node.getVariableMapping()));
         }
 
         @Override
-        public PlanNode visitIntersect(IntersectNode node, RewriteContext<Void> context)
+        public PlanNode visitIntersect(IntersectNode node, RewriteContext<UnaliasContext> context)
         {
             return new IntersectNode(node.getSourceLocation(), node.getId(), rewriteSources(node, context).build(), canonicalizeSetOperationOutputVariables(node.getOutputVariables()), canonicalizeSetOperationVariableMap(node.getVariableMapping()));
         }
 
         @Override
-        public PlanNode visitExcept(ExceptNode node, RewriteContext<Void> context)
+        public PlanNode visitExcept(ExceptNode node, RewriteContext<UnaliasContext> context)
         {
             return new ExceptNode(node.getSourceLocation(), node.getId(), rewriteSources(node, context).build(), canonicalizeSetOperationOutputVariables(node.getOutputVariables()), canonicalizeSetOperationVariableMap(node.getVariableMapping()));
         }
 
-        private static ImmutableList.Builder<PlanNode> rewriteSources(SetOperationNode node, RewriteContext<Void> context)
+        private static ImmutableList.Builder<PlanNode> rewriteSources(SetOperationNode node, RewriteContext<UnaliasContext> context)
         {
             ImmutableList.Builder<PlanNode> rewrittenSources = ImmutableList.builder();
             for (PlanNode source : node.getSources()) {
@@ -726,7 +762,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitTableWriter(TableWriterNode node, RewriteContext<Void> context)
+        public PlanNode visitTableWriter(TableWriterNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             SymbolMapper mapper = new SymbolMapper(mapping, types, warningCollector);
@@ -734,7 +770,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitTableWriteMerge(TableWriterMergeNode node, RewriteContext<Void> context)
+        public PlanNode visitTableWriteMerge(TableWriterMergeNode node, RewriteContext<UnaliasContext> context)
         {
             PlanNode source = context.rewrite(node.getSource());
             SymbolMapper mapper = new SymbolMapper(mapping, types, warningCollector);
@@ -742,7 +778,7 @@ public class UnaliasSymbolReferences
         }
 
         @Override
-        public PlanNode visitPlan(PlanNode node, RewriteContext<Void> context)
+        public PlanNode visitPlan(PlanNode node, RewriteContext<UnaliasContext> context)
         {
             throw new UnsupportedOperationException("Unsupported plan node " + node.getClass().getSimpleName());
         }
@@ -906,6 +942,45 @@ public class UnaliasSymbolReferences
                 builder.add(canonicalize(variable));
             }
             return builder.build();
+        }
+    }
+
+    private static class UnaliasContext
+    {
+        // Correlation mapping is a record of how correlation symbols have been mapped in the subplan which provides them.
+        // All occurrences of correlation symbols within the correlated subquery must be remapped accordingly.
+        // In case of nested correlation, correlationMappings has required mappings for correlation symbols from all levels of nesting.
+        private final Map<VariableReferenceExpression, VariableReferenceExpression> correlationMapping;
+
+        public UnaliasContext(Map<VariableReferenceExpression, VariableReferenceExpression> correlationMapping)
+        {
+            this.correlationMapping = requireNonNull(correlationMapping, "correlationMapping is null");
+        }
+
+        public static UnaliasContext empty()
+        {
+            return new UnaliasContext(ImmutableMap.of());
+        }
+
+        public Map<VariableReferenceExpression, VariableReferenceExpression> getCorrelationMapping()
+        {
+            return correlationMapping;
+        }
+    }
+
+    private abstract static class PlanAndMappings extends PlanNode
+    {
+        private final Map<VariableReferenceExpression, VariableReferenceExpression> mappings;
+
+        public PlanAndMappings(PlanNode root, Map<VariableReferenceExpression, VariableReferenceExpression> mappings)
+        {
+            super(root.getSourceLocation(), root.getId(), root.getStatsEquivalentPlanNode());
+            this.mappings = ImmutableMap.copyOf(requireNonNull(mappings, "mappings is null"));
+        }
+
+        public Map<VariableReferenceExpression, VariableReferenceExpression> getMappings()
+        {
+            return mappings;
         }
     }
 }
