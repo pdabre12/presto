@@ -53,6 +53,7 @@ import com.facebook.presto.spi.storage.TempStorageFactory;
 import com.facebook.presto.spi.tracing.TracerProvider;
 import com.facebook.presto.spi.ttl.ClusterTtlProviderFactory;
 import com.facebook.presto.spi.ttl.NodeTtlFetcherFactory;
+import com.facebook.presto.spi.tvf.TVFProviderFactory;
 import com.facebook.presto.sql.analyzer.AnalyzerProviderManager;
 import com.facebook.presto.sql.analyzer.QueryPreparerProviderManager;
 import com.facebook.presto.sql.expressions.ExpressionOptimizerManager;
@@ -401,6 +402,11 @@ public class PluginManager
         for (ExpressionOptimizerFactory expressionOptimizerFactory : plugin.getExpressionOptimizerFactories()) {
             log.info("Registering expression optimizer factory %s", expressionOptimizerFactory.getName());
             expressionOptimizerManager.addExpressionOptimizerFactory(expressionOptimizerFactory);
+        }
+
+        for (TVFProviderFactory tvfProviderFactory : plugin.getTVFProviderFactories()) {
+            log.info("Registering type provider factory %s", tvfProviderFactory.getName());
+            metadata.getFunctionAndTypeManager().addTVFProviderFactory(tvfProviderFactory);
         }
     }
 

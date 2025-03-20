@@ -17,6 +17,7 @@ import com.facebook.presto.spi.function.FunctionNamespaceManagerFactory;
 import com.facebook.presto.spi.plan.PlanCheckerProviderFactory;
 import com.facebook.presto.spi.session.WorkerSessionPropertyProviderFactory;
 import com.facebook.presto.spi.sql.planner.ExpressionOptimizerFactory;
+import com.facebook.presto.spi.tvf.TVFProviderFactory;
 
 import static java.util.Collections.emptyList;
 
@@ -43,6 +44,11 @@ public interface CoordinatorPlugin
     }
 
     default Iterable<ExpressionOptimizerFactory> getExpressionOptimizerFactories()
+    {
+        return emptyList();
+    }
+
+    default Iterable<TVFProviderFactory> getTVFProviderFactories()
     {
         return emptyList();
     }

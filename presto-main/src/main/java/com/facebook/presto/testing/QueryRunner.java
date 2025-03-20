@@ -105,6 +105,11 @@ public interface QueryRunner
         throw new UnsupportedOperationException();
     }
 
+    default void loadTVFProvider(String tvfProviderName)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     Lock getExclusiveLock();
 
     class MaterializedResultWithPlan
