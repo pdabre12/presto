@@ -129,7 +129,6 @@ import static com.facebook.presto.sql.analyzer.ExpressionTreeUtils.resolveEnumLi
 import static com.facebook.presto.sql.analyzer.FeaturesConfig.CteMaterializationStrategy.NONE;
 import static com.facebook.presto.sql.analyzer.SemanticExceptions.notSupportedException;
 import static com.facebook.presto.sql.planner.PlannerUtils.newVariable;
-import static com.facebook.presto.sql.planner.QueryPlanner.coerce;
 import static com.facebook.presto.sql.planner.QueryPlanner.translateOrderingScheme;
 import static com.facebook.presto.sql.planner.TranslateExpressionsUtil.toRowExpression;
 import static com.facebook.presto.sql.tree.Join.Type.INNER;
@@ -280,7 +279,8 @@ class RelationPlanner
                 if (tableArgument.getPartitionBy().isPresent() && !tableArgument.getPartitionBy().get().isEmpty()) {
                     // This is from unnest and may not be correct
                     List<Expression> partitioningColumns = tableArgument.getPartitionBy().get();
-                    QueryPlanner.PlanAndMappings copartitionCoercions = coerce(sourcePlanBuilder, partitioningColumns, analysis, idAllocator, variableAllocator, metadata, context, session, sqlParser);
+                    QueryPlanner partitionQueryPlanner = new QueryPlanner(analysis, variableAllocator, idAllocator, lambdaDeclarationToVariableMap, metadata, session, context, sqlParser);
+                    QueryPlanner.PlanAndMappings copartitionCoercions = partitionQueryPlanner.coerce(sourcePlanBuilder, partitioningColumns, analysis, idAllocator, variableAllocator, metadata);
                     sourcePlanBuilder = copartitionCoercions.getSubPlan();
                     partitionBy = partitioningColumns.stream()
                            .map(copartitionCoercions::get)
