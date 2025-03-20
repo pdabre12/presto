@@ -130,7 +130,7 @@ public class MockConnectorFactory
     {
         return table -> IntStream.range(0, 100)
                 .boxed()
-                .map(i -> new ColumnMetadata("column_" + i, createUnboundedVarcharType()))
+                .map(i -> ColumnMetadata.builder().setName("column_" + i).setType(createUnboundedVarcharType()).build())
                 .collect(toImmutableList());
     }
 
@@ -289,11 +289,11 @@ public class MockConnectorFactory
             {
                 if (columnHandle instanceof MockConnectorColumnHandle) {
                     MockConnectorColumnHandle mockColumnHandle = (MockConnectorColumnHandle) columnHandle;
-                    return new ColumnMetadata(mockColumnHandle.getName(), mockColumnHandle.getType());
+                    return ColumnMetadata.builder().setName(mockColumnHandle.getName()).setType(mockColumnHandle.getType()).build();
                 }
                 else {
                     TpchColumnHandle tpchColumnHandle = (TpchColumnHandle) columnHandle;
-                    return new ColumnMetadata(tpchColumnHandle.getColumnName(), tpchColumnHandle.getType());
+                    return ColumnMetadata.builder().setName(tpchColumnHandle.getColumnName()).setType(tpchColumnHandle.getType()).build();
                 }
             }
 
@@ -303,7 +303,7 @@ public class MockConnectorFactory
                 return listTables(session, prefix.getSchemaName()).stream()
                         .collect(toImmutableMap(table -> table, table -> IntStream.range(0, 100)
                                 .boxed()
-                                .map(i -> new ColumnMetadata("column_" + i, createUnboundedVarcharType()))
+                                .map(i -> ColumnMetadata.builder().setName("column_" + i).setType(createUnboundedVarcharType()).build())
                                 .collect(toImmutableList())));
             }
 
