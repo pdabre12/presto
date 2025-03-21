@@ -265,7 +265,7 @@ class RelationPlanner
                 Optional<String> name = sourceDescriptor.getFieldByIndex(i).getName();
                 if (name.isPresent()) {
                     columnMapping.put(name.get(), sourcePlan.getVariable(i));
-                    sourcePlanBuilder.getTranslations().put(new Identifier(name.get()), sourcePlan.getVariable(i));
+                    sourcePlanBuilder.getTranslations().put(tableArgument.getPartitionBy().get().get(i), sourcePlan.getVariable(i));
                 }
             }
 
