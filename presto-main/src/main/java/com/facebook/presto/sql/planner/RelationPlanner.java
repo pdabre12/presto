@@ -253,7 +253,6 @@ class RelationPlanner
         // process sources in order of argument declarations
         for (Analysis.TableArgumentAnalysis tableArgument : functionAnalysis.getTableArgumentAnalyses()) {
             RelationPlan sourcePlan = process(tableArgument.getRelation(), context);
-
             PlanBuilder sourcePlanBuilder = initializePlanBuilder(sourcePlan);
 
             // map column names to symbols
@@ -266,6 +265,7 @@ class RelationPlanner
                 Optional<String> name = sourceDescriptor.getFieldByIndex(i).getName();
                 if (name.isPresent()) {
                     columnMapping.put(name.get(), sourcePlan.getVariable(i));
+                    sourcePlanBuilder.getTranslations().put(new Identifier(name.get()), sourcePlan.getVariable(i));
                 }
             }
 
@@ -277,7 +277,6 @@ class RelationPlanner
                 List<VariableReferenceExpression> partitionBy = ImmutableList.of();
                 // if there are partitioning columns, they might have to be coerced for copartitioning
                 if (tableArgument.getPartitionBy().isPresent() && !tableArgument.getPartitionBy().get().isEmpty()) {
-                    // This is from unnest and may not be correct
                     List<Expression> partitioningColumns = tableArgument.getPartitionBy().get();
                     QueryPlanner partitionQueryPlanner = new QueryPlanner(analysis, variableAllocator, idAllocator, lambdaDeclarationToVariableMap, metadata, session, context, sqlParser);
                     QueryPlanner.PlanAndMappings copartitionCoercions = partitionQueryPlanner.coerce(sourcePlanBuilder, partitioningColumns, analysis, idAllocator, variableAllocator, metadata);

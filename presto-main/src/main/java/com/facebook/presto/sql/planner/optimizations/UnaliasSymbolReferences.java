@@ -87,7 +87,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -479,7 +478,6 @@ public class UnaliasSymbolReferences
             return mapper.map(node, source);
         }
 
-
         @Override
         public PlanNode visitTableFunction(TableFunctionNode node, RewriteContext<UnaliasContext> context)
         {
@@ -487,8 +485,8 @@ public class UnaliasSymbolReferences
             SymbolMapper mapper = new SymbolMapper(mappings, warningCollector);
 
             List<VariableReferenceExpression> newProperOutputs = node.getOutputVariables().stream()
-                    .map(mapper::map).
-                    collect(toImmutableList());
+                    .map(mapper::map)
+                    .collect(toImmutableList());
 
             ImmutableList.Builder<PlanNode> newSources = ImmutableList.builder();
             ImmutableList.Builder<TableFunctionNode.TableArgumentProperties> newTableArgumentProperties = ImmutableList.builder();
@@ -497,16 +495,14 @@ public class UnaliasSymbolReferences
                 PlanNode newSource = node.getSources().get(i).accept(this, context);
                 newSources.add(newSource);
 
-
-                SymbolMapper inputMapper = new SymbolMapper(((PlanAndMappings)newSource).getMappings(), warningCollector);
+                SymbolMapper inputMapper = new SymbolMapper(((UnaliasContext.PlanAndMappings) newSource).getMappings(), warningCollector);
                 TableFunctionNode.TableArgumentProperties properties = node.getTableArgumentProperties().get(i);
                 ImmutableMultimap.Builder<String, VariableReferenceExpression> newColumnMapping = ImmutableMultimap.builder();
                 properties.getColumnMapping().entries().stream()
                         .forEach(entry -> newColumnMapping.put(entry.getKey(), inputMapper.map(entry.getValue())));
                 Optional<DataOrganizationSpecification> newSpecification = Optional.of(new DataOrganizationSpecification(
                         inputMapper.mapAndDistinctVariable(properties.specification().get().getPartitionBy()),
-                        Optional.of(inputMapper.map(properties.specification().get().getOrderingScheme().get()))
-                ));
+                        Optional.of(inputMapper.map(properties.specification().get().getOrderingScheme().get()))));
                 newTableArgumentProperties.add(new TableFunctionNode.TableArgumentProperties(
                         properties.getArgumentName(),
                         newColumnMapping.build(),
@@ -526,7 +522,7 @@ public class UnaliasSymbolReferences
                     node.getCopartitioningLists(),
                     node.getHandle());
 
-            return new PlanAndMappings(
+            return new UnaliasContext.PlanAndMappings(
                     tableFunctionNode,
                     mappings)
             {
@@ -966,21 +962,22 @@ public class UnaliasSymbolReferences
         {
             return correlationMapping;
         }
-    }
 
-    private abstract static class PlanAndMappings extends PlanNode
-    {
-        private final Map<VariableReferenceExpression, VariableReferenceExpression> mappings;
-
-        public PlanAndMappings(PlanNode root, Map<VariableReferenceExpression, VariableReferenceExpression> mappings)
+        private abstract static class PlanAndMappings
+                extends PlanNode
         {
-            super(root.getSourceLocation(), root.getId(), root.getStatsEquivalentPlanNode());
-            this.mappings = ImmutableMap.copyOf(requireNonNull(mappings, "mappings is null"));
-        }
+            private final Map<VariableReferenceExpression, VariableReferenceExpression> mappings;
 
-        public Map<VariableReferenceExpression, VariableReferenceExpression> getMappings()
-        {
-            return mappings;
+            public PlanAndMappings(PlanNode root, Map<VariableReferenceExpression, VariableReferenceExpression> mappings)
+            {
+                super(root.getSourceLocation(), root.getId(), root.getStatsEquivalentPlanNode());
+                this.mappings = ImmutableMap.copyOf(requireNonNull(mappings, "mappings is null"));
+            }
+
+            public Map<VariableReferenceExpression, VariableReferenceExpression> getMappings()
+            {
+                return mappings;
+            }
         }
     }
 }
