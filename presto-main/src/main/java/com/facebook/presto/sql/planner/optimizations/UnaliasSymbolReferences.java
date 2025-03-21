@@ -481,7 +481,11 @@ public class UnaliasSymbolReferences
         @Override
         public PlanNode visitTableFunction(TableFunctionNode node, RewriteContext<UnaliasContext> context)
         {
-            Map<VariableReferenceExpression, VariableReferenceExpression> mappings = new HashMap<>(context.get().getCorrelationMapping());
+            Map<VariableReferenceExpression, VariableReferenceExpression> mappings =
+                    Optional.ofNullable(context.get())
+                            .map(c -> new HashMap<>(c.getCorrelationMapping()))
+                            .orElseGet(HashMap::new);
+
             SymbolMapper mapper = new SymbolMapper(mappings, warningCollector);
 
             List<VariableReferenceExpression> newProperOutputs = node.getOutputVariables().stream()
@@ -495,14 +499,19 @@ public class UnaliasSymbolReferences
                 PlanNode newSource = node.getSources().get(i).accept(this, context);
                 newSources.add(newSource);
 
-                SymbolMapper inputMapper = new SymbolMapper(((UnaliasContext.PlanAndMappings) newSource).getMappings(), warningCollector);
+                SymbolMapper inputMapper = new SymbolMapper(
+                        newSource instanceof UnaliasContext.PlanAndMappings
+                                ? ((UnaliasContext.PlanAndMappings) newSource).getMappings()
+                                : new HashMap<>(),
+                        warningCollector);
+
                 TableFunctionNode.TableArgumentProperties properties = node.getTableArgumentProperties().get(i);
                 ImmutableMultimap.Builder<String, VariableReferenceExpression> newColumnMapping = ImmutableMultimap.builder();
                 properties.getColumnMapping().entries().stream()
                         .forEach(entry -> newColumnMapping.put(entry.getKey(), inputMapper.map(entry.getValue())));
-                Optional<DataOrganizationSpecification> newSpecification = Optional.of(new DataOrganizationSpecification(
-                        inputMapper.mapAndDistinctVariable(properties.specification().get().getPartitionBy()),
-                        Optional.of(inputMapper.map(properties.specification().get().getOrderingScheme().get()))));
+
+                Optional<DataOrganizationSpecification> newSpecification = properties.specification().map(inputMapper::mapAndDistinct);
+
                 newTableArgumentProperties.add(new TableFunctionNode.TableArgumentProperties(
                         properties.getArgumentName(),
                         newColumnMapping.build(),
