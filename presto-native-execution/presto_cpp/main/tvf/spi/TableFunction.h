@@ -28,16 +28,11 @@
 
 namespace facebook::presto::tvf {
 
+using TableArgumentSpecList =
+    std::unordered_set<std::shared_ptr<ArgumentSpecification>>;
+
 class TableFunction {
  public:
-  struct Metadata {
-    // This could include stuff like isPassthrough, distribution etc.
-    static Metadata defaultMetadata() {
-      static Metadata defaultValue;
-      return defaultValue;
-    }
-  };
-
   explicit TableFunction(
       velox::memory::MemoryPool* pool,
       velox::HashStringAllocator* stringAllocator)
@@ -95,18 +90,22 @@ using TableFunctionAnalyzer =
 /// registration.
 bool registerTableFunction(
     const std::string& name,
-    TableFunction::Metadata metadata,
+    TableArgumentSpecList argumentsSpec,
+    ReturnSpecPtr returnSpec,
     TableFunctionAnalyzer analyzer,
     TableFunctionFactory factory);
 
 struct TableFunctionEntry {
+  TableArgumentSpecList argumentsSpec;
+  ReturnSpecPtr returnSpec;
   TableFunctionAnalyzer analyzer;
   TableFunctionFactory factory;
-  TableFunction::Metadata metadata;
 };
 
-/// Returns Table function metadata.
-TableFunction::Metadata getTableFunctionMetadata(const std::string& name);
+// Returning a pointer since it can be dynamic cast.
+ReturnSpecPtr getTableFunctionReturnType(const std::string& name);
+
+TableArgumentSpecList getTableFunctionArgumentSpecs(const std::string& name);
 
 using TableFunctionMap = std::unordered_map<std::string, TableFunctionEntry>;
 

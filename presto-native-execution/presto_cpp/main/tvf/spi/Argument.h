@@ -28,4 +28,25 @@ class Argument {
  protected:
 };
 
+class ArgumentSpecification {
+ public:
+  ArgumentSpecification(std::string name, bool required)
+      : name_(std::move(name)), required_(required){};
+
+  virtual ~ArgumentSpecification() = default;
+
+  const std::string& name() const {
+    return name_;
+  }
+
+  const bool required() const {
+    return required_;
+  }
+
+ private:
+  const std::string name_;
+  const bool required_;
+  // TODO : Add default value.
+};
+
 } // namespace facebook::presto::tvf
