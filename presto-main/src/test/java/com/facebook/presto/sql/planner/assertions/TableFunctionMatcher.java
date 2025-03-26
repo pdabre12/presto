@@ -139,7 +139,7 @@ public class TableFunctionMatcher
                         .map(symbolAliases::get)
                         .collect(toImmutableSet());
                 Set<SymbolReference> actualPassThrough = argumentProperties.getPassThroughSpecification().getColumns().stream()
-                        .map(var -> new SymbolReference(var.getOutputVariables().getName()))
+                        .map(var -> var.getOutputVariables().toSymbolReference())
                         .collect(toImmutableSet());
                 if (!expectedPassThrough.equals(actualPassThrough)) {
                     return NO_MATCH;

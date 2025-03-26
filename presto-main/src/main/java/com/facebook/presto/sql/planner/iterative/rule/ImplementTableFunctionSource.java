@@ -17,13 +17,22 @@ package com.facebook.presto.sql.planner.iterative.rule;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.matching.Captures;
 import com.facebook.presto.matching.Pattern;
+import com.facebook.presto.metadata.FunctionAndTypeManager;
 import com.facebook.presto.metadata.Metadata;
-import com.facebook.presto.metadata.ResolvedFunction;
+import com.facebook.presto.spi.SourceLocation;
+import com.facebook.presto.spi.function.FunctionHandle;
+import com.facebook.presto.spi.function.FunctionMetadata;
+import com.facebook.presto.spi.plan.EquiJoinClause;
+import com.facebook.presto.spi.plan.JoinDistributionType;
 import com.facebook.presto.spi.plan.JoinType;
+import com.facebook.presto.spi.plan.Ordering;
 import com.facebook.presto.spi.plan.OrderingScheme;
 import com.facebook.presto.spi.plan.WindowNode;
 import com.facebook.presto.spi.plan.WindowNode.Frame;
+import com.facebook.presto.spi.relation.CallExpression;
+import com.facebook.presto.spi.relation.RowExpression;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
+import com.facebook.presto.sql.planner.SqlPlannerContext;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.iterative.Rule;
 import com.facebook.presto.spi.plan.Assignments;
@@ -46,10 +55,13 @@ import com.facebook.presto.sql.tree.IfExpression;
 import com.facebook.presto.sql.tree.NotExpression;
 import com.facebook.presto.sql.tree.NullLiteral;
 import com.facebook.presto.sql.tree.QualifiedName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
+import jdk.nashorn.internal.codegen.FunctionSignature;
+import org.apache.ratis.thirdparty.org.checkerframework.checker.nullness.Opt;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -57,24 +69,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
-//import static com.facebook.presto.sql.analyzer.TypeSignatureTranslator.toSqlType;
 import static com.facebook.presto.spi.plan.JoinType.FULL;
 import static com.facebook.presto.spi.plan.JoinType.INNER;
 import static com.facebook.presto.spi.plan.JoinType.LEFT;
 import static com.facebook.presto.spi.plan.JoinType.RIGHT;
+import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_PRECEDING;
+import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_FOLLOWING;
+import static com.facebook.presto.spi.plan.WindowNode.Frame.WindowType.ROWS;
+import static com.facebook.presto.sql.planner.TranslateExpressionsUtil.toRowExpression;
 import static com.facebook.presto.sql.planner.plan.Patterns.tableFunction;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.EQUAL;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.GREATER_THAN;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.IS_DISTINCT_FROM;
-import static com.facebook.presto.sql.tree.FrameBound.Type.UNBOUNDED_FOLLOWING;
-import static com.facebook.presto.sql.tree.FrameBound.Type.UNBOUNDED_PRECEDING;
 import static com.facebook.presto.sql.tree.LogicalBinaryExpression.Operator.AND;
-import static com.facebook.presto.sql.tree.LogicalBinaryExpression.Operator.OR;N
-import static com.facebook.presto.sql.tree.WindowFrame.Type.ROWS;
+import static com.facebook.presto.sql.tree.LogicalBinaryExpression.Operator.OR;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -202,8 +216,26 @@ public class ImplementTableFunctionSource
         }
         Map<String, SourceWithProperties> sources = mapSourcesByName(node.getSources(), node.getTableArgumentProperties());
         ImmutableList.Builder<NodeWithVariables> intermediateResultsBuilder = ImmutableList.builder();
-        ResolvedFunction rowNumberFunction = metadata.resolveFunction(context.getSession(), QualifiedName.of("row_number"), ImmutableList.of());
-        ResolvedFunction countFunction = metadata.resolveFunction(context.getSession(), QualifiedName.of("count"), ImmutableList.of());
+
+        FunctionAndTypeManager functionAndTypeManager = metadata.getFunctionAndTypeManager();
+
+        // Create call expression for row_number
+        FunctionHandle rowNumberFunctionHandle = functionAndTypeManager.resolveFunction(Optional.of(context.getSession().getSessionFunctions()),
+                context.getSession().getTransactionId(),
+                functionAndTypeManager.getFunctionAndTypeResolver().qualifyObjectName(QualifiedName.of("row_number")),
+                ImmutableList.of());
+
+        FunctionMetadata rowNumberFunctionMetadata = functionAndTypeManager.getFunctionMetadata(rowNumberFunctionHandle);
+        CallExpression rowNumberFunction = new CallExpression("row_number", rowNumberFunctionHandle, functionAndTypeManager.getType(rowNumberFunctionMetadata.getReturnType()), ImmutableList.of());
+
+        // Create call expression for count
+        FunctionHandle countFunctionHandle = functionAndTypeManager.resolveFunction(Optional.of(context.getSession().getSessionFunctions()),
+                context.getSession().getTransactionId(),
+                functionAndTypeManager.getFunctionAndTypeResolver().qualifyObjectName(QualifiedName.of("count")),
+                ImmutableList.of());
+
+        FunctionMetadata countFunctionMetadata = functionAndTypeManager.getFunctionMetadata(countFunctionHandle);
+        CallExpression countFunction = new CallExpression("count", countFunctionHandle, functionAndTypeManager.getType(countFunctionMetadata.getReturnType()), ImmutableList.of());
 
         // handle co-partitioned sources
         for (List<String> copartitioningList : node.getCopartitioningLists()) {
@@ -265,7 +297,9 @@ public class ImplementTableFunctionSource
         // It runs along each partition in the cartesian product, numbering the partition's rows according to the expected ordering / orderings.
         // note: ordering is necessary even if all the source tables are not ordered. Thanks to the ordering, the original rows
         // of each input table come before the "filler" rows.
-        Optional<OrderingScheme> finalOrderBy = Optional.of(new OrderingScheme(ImmutableList.of(finalRowNumberSymbol), ImmutableMap.of(finalRowNumberSymbol, ASC_NULLS_LAST)));
+        ImmutableList.Builder<Ordering> newOrderings = ImmutableList.builder();
+        newOrderings.add(new Ordering(finalRowNumberSymbol, ASC_NULLS_LAST));
+        Optional<OrderingScheme> finalOrderBy = Optional.of(new OrderingScheme(newOrderings.build()));
 
         // derive the prune when empty property
         boolean pruneWhenEmpty = node.getTableArgumentProperties().stream().anyMatch(TableArgumentProperties::pruneWhenEmpty);
@@ -305,8 +339,8 @@ public class ImplementTableFunctionSource
     private static NodeWithVariables planWindowFunctionsForSource(
             PlanNode source,
             TableArgumentProperties argumentProperties,
-            ResolvedFunction rowNumberFunction,
-            ResolvedFunction countFunction,
+            CallExpression rowNumberFunction,
+            CallExpression countFunction,
             Context context)
     {
         String argumentName = argumentProperties.getArgumentName();
@@ -323,6 +357,7 @@ public class ImplementTableFunctionSource
         DataOrganizationSpecification specification = argumentProperties.specification().orElse(UNORDERED_SINGLE_PARTITION);
 
         PlanNode window = new WindowNode(
+                source.getSourceLocation(),
                 context.getIdAllocator().getNextId(),
                 source,
                 specification,
@@ -338,8 +373,8 @@ public class ImplementTableFunctionSource
 
     private static NodeWithVariables copartition(
             List<SourceWithProperties> sourceList,
-            ResolvedFunction rowNumberFunction,
-            ResolvedFunction countFunction,
+            CallExpression rowNumberFunction,
+            CallExpression countFunction,
             Context context)
     {
         checkArgument(sourceList.size() >= 2, "co-partitioning list should contain at least two tables");
@@ -374,12 +409,12 @@ public class ImplementTableFunctionSource
         Expression leftRowNumber = left.rowNumber().toSymbolReference();
         Expression leftPartitionSize = left.partitionSize().toSymbolReference();
         List<Expression> leftPartitionBy = left.partitionBy().stream()
-                .map(Symbol::toSymbolReference)
+                .map(VariableReferenceExpression::toSymbolReference)
                 .collect(toImmutableList());
         Expression rightRowNumber = right.rowNumber().toSymbolReference();
         Expression rightPartitionSize = right.partitionSize().toSymbolReference();
         List<Expression> rightPartitionBy = right.partitionBy().stream()
-                .map(Symbol::toSymbolReference)
+                .map(VariableReferenceExpression::toSymbolReference)
                 .collect(toImmutableList());
 
         List<Expression> copartitionConjuncts = Streams.zip(
@@ -466,21 +501,21 @@ public class ImplementTableFunctionSource
 
         return new JoinedNodes(
                 new JoinNode(
+                        Optional.empty(),
                         context.getIdAllocator().getNextId(),
                         joinType,
                         left.node(),
                         right.node(),
                         ImmutableList.of(),
-                        left.node().getOutputVariables(),
-                        right.node().getOutputSymbols(),
-                        false,
-                        Optional.of(joinCondition),
+                        Stream.concat(left.node().getOutputVariables().stream(),
+                                        right.node().getOutputVariables().stream())
+                                .collect(Collectors.toList()),
+//                        Optional.of(joinCondition),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
-                        ImmutableMap.of(),
-                        Optional.empty()),
+                        ImmutableMap.of()),
                 left.rowNumber(),
                 left.partitionSize(),
                 left.partitionBy(),
@@ -532,7 +567,7 @@ public class ImplementTableFunctionSource
         for (int i = 0; i < copartitionedNodes.leftPartitionBy().size(); i++) {
             VariableReferenceExpression leftColumn = copartitionedNodes.leftPartitionBy().get(i);
             VariableReferenceExpression rightColumn = copartitionedNodes.rightPartitionBy().get(i);
-            Type type = context.getVariableAllocator().getTypes().get(leftColumn);
+            Type type = context.getVariableAllocator().getVariables().get(leftColumn.getName());
 
             VariableReferenceExpression joinedColumn = context.getVariableAllocator().newVariable("combined_partition_column", type);
             joinedPartitionByAssignments.put(joinedColumn, new CoalesceExpression(leftColumn.toSymbolReference(), rightColumn.toSymbolReference()));
@@ -548,7 +583,6 @@ public class ImplementTableFunctionSource
                         .put(joinedPartitionSize, partitionSizeExpression)
                         .putAll(joinedPartitionByAssignments.build())
                         .build());
-
         boolean joinedPruneWhenEmpty = copartitionedNodes.leftPruneWhenEmpty() || copartitionedNodes.rightPruneWhenEmpty();
 
         Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<VariableReferenceExpression, VariableReferenceExpression>builder()
@@ -557,6 +591,18 @@ public class ImplementTableFunctionSource
                 .buildOrThrow();
 
         return new NodeWithVariables(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy.build(), joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
+    }
+
+    private RowExpression rowExpression(Expression expression, Context context)
+    {
+        return toRowExpression(
+                expression,
+                metadata,
+                context.getSession(),
+                context.sqlParser,
+                context.getVariableAllocator(),
+                analysis,
+                context.getTranslatorContext());
     }
 
     private static JoinedNodes join(NodeWithVariables left, NodeWithVariables right, Context context)
@@ -601,21 +647,22 @@ public class ImplementTableFunctionSource
 
         return new JoinedNodes(
                 new JoinNode(
+                        Optional.empty(),
                         context.getIdAllocator().getNextId(),
                         joinType,
                         left.node(),
                         right.node(),
                         ImmutableList.of(),
-                        left.node().getOutputVariables(),
-                        right.node().getOutputVariables(),
-                        false,
-                        Optional.of(joinCondition),
+                        Stream.concat(left.node().getOutputVariables().stream(),
+                                        right.node().getOutputVariables().stream())
+                                .collect(Collectors.toList()),
+                        //Optional.of(joinCondition),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
-                        ImmutableMap.of(),
-                        Optional.empty()),
+                        ImmutableMap.of()
+                        ),
                 left.rowNumber(),
                 left.partitionSize(),
                 left.partitionBy(),
@@ -671,7 +718,7 @@ public class ImplementTableFunctionSource
 
         boolean joinedPruneWhenEmpty = joinedNodes.leftPruneWhenEmpty() || joinedNodes.rightPruneWhenEmpty();
 
-        Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<Symbol, Symbol>builder()
+        Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<VariableReferenceExpression, VariableReferenceExpression>builder()
                 .putAll(joinedNodes.leftRowNumberSymbolsMapping())
                 .putAll(joinedNodes.rightRowNumberSymbolsMapping())
                 .buildOrThrow();
