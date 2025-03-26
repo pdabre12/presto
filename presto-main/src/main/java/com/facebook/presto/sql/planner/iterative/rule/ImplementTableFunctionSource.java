@@ -18,7 +18,8 @@ import com.facebook.presto.common.type.Type;
 import com.facebook.presto.matching.Captures;
 import com.facebook.presto.matching.Pattern;
 import com.facebook.presto.metadata.Metadata;
-//import com.facebook.presto.metadata.ResolvedFunction;
+import com.facebook.presto.metadata.ResolvedFunction;
+import com.facebook.presto.spi.plan.JoinType;
 import com.facebook.presto.spi.plan.OrderingScheme;
 import com.facebook.presto.spi.plan.WindowNode;
 import com.facebook.presto.spi.plan.WindowNode.Frame;
@@ -165,7 +166,7 @@ public class ImplementTableFunctionSource
             return Result.ofPlanNode(new TableFunctionProcessorNode(
                     node.getId(),
                     node.getName(),
-                    node.getProperOutput(),
+                    node.getProperOutputs(),
                     Optional.empty(),
                     false,
                     ImmutableList.of(),
@@ -189,18 +190,18 @@ public class ImplementTableFunctionSource
                     node.getName(),
                     node.getProperOutputs(),
                     Optional.of(getOnlyElement(node.getSources())),
-                    sourceProperties.isPruneWhenEmpty(),
+                    sourceProperties.pruneWhenEmpty(),
                     ImmutableList.of(sourceProperties.getPassThroughSpecification()),
                     ImmutableList.of(sourceProperties.getRequiredColumns()),
                     Optional.empty(),
-                    sourceProperties.getSpecification(),
+                    sourceProperties.specification(),
                     ImmutableSet.of(),
                     0,
                     Optional.empty(),
                     node.getHandle()));
         }
         Map<String, SourceWithProperties> sources = mapSourcesByName(node.getSources(), node.getTableArgumentProperties());
-        ImmutableList.Builder<NodeWithSymbols> intermediateResultsBuilder = ImmutableList.builder();
+        ImmutableList.Builder<NodeWithVariables> intermediateResultsBuilder = ImmutableList.builder();
         ResolvedFunction rowNumberFunction = metadata.resolveFunction(context.getSession(), QualifiedName.of("row_number"), ImmutableList.of());
         ResolvedFunction countFunction = metadata.resolveFunction(context.getSession(), QualifiedName.of("count"), ImmutableList.of());
 
@@ -221,19 +222,19 @@ public class ImplementTableFunctionSource
                 .map(entry -> planWindowFunctionsForSource(entry.getValue().source(), entry.getValue().properties(), rowNumberFunction, countFunction, context))
                 .forEach(intermediateResultsBuilder::add);
 
-        NodeWithSymbols finalResultSource;
+        NodeWithVariables finalResultSource;
 
-        List<NodeWithSymbols> intermediateResultSources = intermediateResultsBuilder.build();
+        List<NodeWithVariables> intermediateResultSources = intermediateResultsBuilder.build();
         if (intermediateResultSources.size() == 1) {
             finalResultSource = getOnlyElement(intermediateResultSources);
         }
         else {
-            NodeWithSymbols first = intermediateResultSources.get(0);
-            NodeWithSymbols second = intermediateResultSources.get(1);
+            NodeWithVariables first = intermediateResultSources.get(0);
+            NodeWithVariables second = intermediateResultSources.get(1);
             JoinedNodes joined = join(first, second, context);
 
             for (int i = 2; i < intermediateResultSources.size(); i++) {
-                NodeWithSymbols joinedWithSymbols = appendHelperSymbolsForJoinedNodes(joined, context);
+                NodeWithVariables joinedWithSymbols = appendHelperSymbolsForJoinedNodes(joined, context);
                 joined = join(joinedWithSymbols, intermediateResultSources.get(i), context);
             }
 
@@ -245,20 +246,20 @@ public class ImplementTableFunctionSource
         // The "filler" input rows are the rows appended while joining partitions of different lengths,
         // to fill the smaller partition up to the bigger partition's size. They are a side effect of the algorithm,
         // and should not be processed by the table function.
-        Map<Symbol, Symbol> rowNumberSymbols = finalResultSource.rowNumberSymbolsMapping();
+        Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbols = finalResultSource.rowNumberSymbolsMapping();
 
         // The max row number symbol from all joined partitions.
-        Symbol finalRowNumberSymbol = finalResultSource.rowNumber();
+        VariableReferenceExpression finalRowNumberSymbol = finalResultSource.rowNumber();
         // Combined partitioning lists from all sources.
-        List<Symbol> finalPartitionBy = finalResultSource.partitionBy();
+        List<VariableReferenceExpression> finalPartitionBy = finalResultSource.partitionBy();
 
         NodeWithMarkers marked = appendMarkerSymbols(finalResultSource.node(), ImmutableSet.copyOf(rowNumberSymbols.values()), finalRowNumberSymbol, context);
 
         // Remap the symbol mapping: replace the row number symbol with the corresponding marker symbol.
         // In the new map, every source symbol is associated with the corresponding marker symbol.
         // Null value of the marker indicates that the source value should be ignored by the table function.
-        ImmutableMap<Symbol, Symbol> markerSymbols = rowNumberSymbols.entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> marked.symbolToMarker().get(entry.getValue())));
+        ImmutableMap<VariableReferenceExpression, VariableReferenceExpression> markerSymbols = rowNumberSymbols.entrySet().stream()
+                .collect(toImmutableMap(Map.Entry::getKey, entry -> marked.variableToMarker().get(entry.getValue())));
 
         // Use the final row number symbol for ordering the combined sources.
         // It runs along each partition in the cartesian product, numbering the partition's rows according to the expected ordering / orderings.
@@ -267,7 +268,7 @@ public class ImplementTableFunctionSource
         Optional<OrderingScheme> finalOrderBy = Optional.of(new OrderingScheme(ImmutableList.of(finalRowNumberSymbol), ImmutableMap.of(finalRowNumberSymbol, ASC_NULLS_LAST)));
 
         // derive the prune when empty property
-        boolean pruneWhenEmpty = node.getTableArgumentProperties().stream().anyMatch(TableArgumentProperties::isPruneWhenEmpty);
+        boolean pruneWhenEmpty = node.getTableArgumentProperties().stream().anyMatch(TableArgumentProperties::pruneWhenEmpty);
 
         // Combine the pass through specifications from all sources
         List<PassThroughSpecification> passThroughSpecifications = node.getTableArgumentProperties().stream()
@@ -275,7 +276,7 @@ public class ImplementTableFunctionSource
                 .collect(toImmutableList());
 
         // Combine the required symbols from all sources
-        List<List<Symbol>> requiredSymbols = node.getTableArgumentProperties().stream()
+        List<List<VariableReferenceExpression>> requiredVariables = node.getTableArgumentProperties().stream()
                 .map(TableArgumentProperties::getRequiredColumns)
                 .collect(toImmutableList());
 
@@ -286,7 +287,7 @@ public class ImplementTableFunctionSource
                 Optional.of(marked.node()),
                 pruneWhenEmpty,
                 passThroughSpecifications,
-                requiredSymbols,
+                requiredVariables,
                 Optional.of(markerSymbols),
                 Optional.of(new DataOrganizationSpecification(finalPartitionBy, finalOrderBy)),
                 ImmutableSet.of(),
@@ -301,7 +302,7 @@ public class ImplementTableFunctionSource
                 .collect(toImmutableMap(entry -> entry.properties().getArgumentName(), identity()));
     }
 
-    private static NodeWithSymbols planWindowFunctionsForSource(
+    private static NodeWithVariables planWindowFunctionsForSource(
             PlanNode source,
             TableArgumentProperties argumentProperties,
             ResolvedFunction rowNumberFunction,
@@ -310,32 +311,32 @@ public class ImplementTableFunctionSource
     {
         String argumentName = argumentProperties.getArgumentName();
 
-        Symbol rowNumber = context.getSymbolAllocator().newSymbol(argumentName + "_row_number", BIGINT);
-        Map<Symbol, Symbol> rowNumberSymbolMapping = source.getOutputSymbols().stream()
+        VariableReferenceExpression rowNumber = context.getVariableAllocator().newVariable(argumentName + "_row_number", BIGINT);
+        Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbolMapping = source.getOutputVariables().stream()
                 .collect(toImmutableMap(identity(), symbol -> rowNumber));
 
-        Symbol partitionSize = context.getSymbolAllocator().newSymbol(argumentName + "_partition_size", BIGINT);
+        VariableReferenceExpression partitionSize = context.getVariableAllocator().newVariable(argumentName + "_partition_size", BIGINT);
 
         // If the source has set semantics, its specification is present, even if there is no partitioning or ordering specified.
         // If the source has row semantics, its specification is empty. Currently, such source is processed
         // as if it was a single partition. Alternatively, it could be split into smaller partitions of arbitrary size.
-        DataOrganizationSpecification specification = argumentProperties.getSpecification().orElse(UNORDERED_SINGLE_PARTITION);
+        DataOrganizationSpecification specification = argumentProperties.specification().orElse(UNORDERED_SINGLE_PARTITION);
 
         PlanNode window = new WindowNode(
                 context.getIdAllocator().getNextId(),
                 source,
                 specification,
                 ImmutableMap.of(
-                        rowNumber, new WindowNode.Function(rowNumberFunction, ImmutableList.of(), FULL_FRAME, false),
-                        partitionSize, new WindowNode.Function(countFunction, ImmutableList.of(), FULL_FRAME, false)),
+                        rowNumber, new WindowNode.Function(rowNumberFunction, FULL_FRAME, false),
+                        partitionSize, new WindowNode.Function(countFunction, FULL_FRAME, false)),
                 Optional.empty(),
                 ImmutableSet.of(),
                 0);
 
-        return new NodeWithSymbols(window, rowNumber, partitionSize, specification.getPartitionBy(), argumentProperties.isPruneWhenEmpty(), rowNumberSymbolMapping);
+        return new NodeWithVariables(window, rowNumber, partitionSize, specification.getPartitionBy(), argumentProperties.pruneWhenEmpty(), rowNumberSymbolMapping);
     }
 
-    private static NodeWithSymbols copartition(
+    private static NodeWithVariables copartition(
             List<SourceWithProperties> sourceList,
             ResolvedFunction rowNumberFunction,
             ResolvedFunction countFunction,
@@ -346,23 +347,23 @@ public class ImplementTableFunctionSource
         // Reorder the co-partitioned sources to process the sources with prune when empty property first.
         // It allows to use inner or side joins instead of outer joins.
         sourceList = sourceList.stream()
-                .sorted(Comparator.comparingInt(source -> source.properties().isPruneWhenEmpty() ? -1 : 1))
+                .sorted(Comparator.comparingInt(source -> source.properties().pruneWhenEmpty() ? -1 : 1))
                 .collect(toImmutableList());
 
-        NodeWithSymbols first = planWindowFunctionsForSource(sourceList.get(0).source(), sourceList.get(0).properties(), rowNumberFunction, countFunction, context);
-        NodeWithSymbols second = planWindowFunctionsForSource(sourceList.get(1).source(), sourceList.get(1).properties(), rowNumberFunction, countFunction, context);
+        NodeWithVariables first = planWindowFunctionsForSource(sourceList.get(0).source(), sourceList.get(0).properties(), rowNumberFunction, countFunction, context);
+        NodeWithVariables second = planWindowFunctionsForSource(sourceList.get(1).source(), sourceList.get(1).properties(), rowNumberFunction, countFunction, context);
         JoinedNodes copartitioned = copartition(first, second, context);
 
         for (int i = 2; i < sourceList.size(); i++) {
-            NodeWithSymbols copartitionedWithSymbols = appendHelperSymbolsForCopartitionedNodes(copartitioned, context);
-            NodeWithSymbols next = planWindowFunctionsForSource(sourceList.get(i).source(), sourceList.get(i).properties(), rowNumberFunction, countFunction, context);
+            NodeWithVariables copartitionedWithSymbols = appendHelperSymbolsForCopartitionedNodes(copartitioned, context);
+            NodeWithVariables next = planWindowFunctionsForSource(sourceList.get(i).source(), sourceList.get(i).properties(), rowNumberFunction, countFunction, context);
             copartitioned = copartition(copartitionedWithSymbols, next, context);
         }
 
         return appendHelperSymbolsForCopartitionedNodes(copartitioned, context);
     }
 
-    private static JoinedNodes copartition(NodeWithSymbols left, NodeWithSymbols right, Context context)
+    private static JoinedNodes copartition(NodeWithVariables left, NodeWithVariables right, Context context)
     {
         checkArgument(left.partitionBy().size() == right.partitionBy().size(), "co-partitioning lists do not match");
 
@@ -449,7 +450,7 @@ public class ImplementTableFunctionSource
         //   1      'a'    null   null
         //   2      'b'    2      'c'
         //   null   null   3      'd'
-        JoinNode.Type joinType;
+        JoinType joinType;
         if (left.pruneWhenEmpty() && right.pruneWhenEmpty()) {
             joinType = INNER;
         }
@@ -470,7 +471,7 @@ public class ImplementTableFunctionSource
                         left.node(),
                         right.node(),
                         ImmutableList.of(),
-                        left.node().getOutputSymbols(),
+                        left.node().getOutputVariables(),
                         right.node().getOutputSymbols(),
                         false,
                         Optional.of(joinCondition),
@@ -492,7 +493,7 @@ public class ImplementTableFunctionSource
                 right.rowNumberSymbolsMapping());
     }
 
-    private static NodeWithSymbols appendHelperSymbolsForCopartitionedNodes(
+    private static NodeWithVariables appendHelperSymbolsForCopartitionedNodes(
             JoinedNodes copartitionedNodes,
             Context context)
     {
@@ -504,7 +505,7 @@ public class ImplementTableFunctionSource
         Expression rightPartitionSize = copartitionedNodes.rightPartitionSize().toSymbolReference();
 
         // Derive row number for joined partitions: this is the bigger partition's row number. One of the combined values might be null as a result of outer join.
-        Symbol joinedRowNumber = context.getSymbolAllocator().newSymbol("combined_row_number", BIGINT);
+        VariableReferenceExpression joinedRowNumber = context.getVariableAllocator().newVariable("combined_row_number", BIGINT);
         Expression rowNumberExpression = new IfExpression(
                 new ComparisonExpression(
                         GREATER_THAN,
@@ -514,7 +515,7 @@ public class ImplementTableFunctionSource
                 rightRowNumber);
 
         // Derive partition size for joined partitions: this is the bigger partition's size. One of the combined values might be null as a result of outer join.
-        Symbol joinedPartitionSize = context.getSymbolAllocator().newSymbol("combined_partition_size", BIGINT);
+        VariableReferenceExpression joinedPartitionSize = context.getVariableAllocator().newVariable("combined_partition_size", BIGINT);
         Expression partitionSizeExpression = new IfExpression(
                 new ComparisonExpression(
                         GREATER_THAN,
@@ -526,14 +527,14 @@ public class ImplementTableFunctionSource
         // Derive partitioning columns for joined partitions.
         // Either the combined partitioning columns are pairwise NOT DISTINCT (this is the co-partitioning rule),
         // or one of them is null as a result of outer join.
-        ImmutableList.Builder<Symbol> joinedPartitionBy = ImmutableList.builder();
+        ImmutableList.Builder<VariableReferenceExpression> joinedPartitionBy = ImmutableList.builder();
         Assignments.Builder joinedPartitionByAssignments = Assignments.builder();
         for (int i = 0; i < copartitionedNodes.leftPartitionBy().size(); i++) {
-            Symbol leftColumn = copartitionedNodes.leftPartitionBy().get(i);
-            Symbol rightColumn = copartitionedNodes.rightPartitionBy().get(i);
-            Type type = context.getSymbolAllocator().getTypes().get(leftColumn);
+            VariableReferenceExpression leftColumn = copartitionedNodes.leftPartitionBy().get(i);
+            VariableReferenceExpression rightColumn = copartitionedNodes.rightPartitionBy().get(i);
+            Type type = context.getVariableAllocator().getTypes().get(leftColumn);
 
-            Symbol joinedColumn = context.getSymbolAllocator().newSymbol("combined_partition_column", type);
+            VariableReferenceExpression joinedColumn = context.getVariableAllocator().newVariable("combined_partition_column", type);
             joinedPartitionByAssignments.put(joinedColumn, new CoalesceExpression(leftColumn.toSymbolReference(), rightColumn.toSymbolReference()));
             joinedPartitionBy.add(joinedColumn);
         }
@@ -542,7 +543,7 @@ public class ImplementTableFunctionSource
                 context.getIdAllocator().getNextId(),
                 copartitionedNodes.joinedNode(),
                 Assignments.builder()
-                        .putIdentities(copartitionedNodes.joinedNode().getOutputSymbols())
+                        .putIdentities(copartitionedNodes.joinedNode().getOutputVariables())
                         .put(joinedRowNumber, rowNumberExpression)
                         .put(joinedPartitionSize, partitionSizeExpression)
                         .putAll(joinedPartitionByAssignments.build())
@@ -550,15 +551,15 @@ public class ImplementTableFunctionSource
 
         boolean joinedPruneWhenEmpty = copartitionedNodes.leftPruneWhenEmpty() || copartitionedNodes.rightPruneWhenEmpty();
 
-        Map<Symbol, Symbol> joinedRowNumberSymbolsMapping = ImmutableMap.<Symbol, Symbol>builder()
+        Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<VariableReferenceExpression, VariableReferenceExpression>builder()
                 .putAll(copartitionedNodes.leftRowNumberSymbolsMapping())
                 .putAll(copartitionedNodes.rightRowNumberSymbolsMapping())
                 .buildOrThrow();
 
-        return new NodeWithSymbols(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy.build(), joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
+        return new NodeWithVariables(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy.build(), joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
     }
 
-    private static JoinedNodes join(NodeWithSymbols left, NodeWithSymbols right, Context context)
+    private static JoinedNodes join(NodeWithVariables left, NodeWithVariables right, Context context)
     {
         Expression leftRowNumber = left.rowNumber().toSymbolReference();
         Expression leftPartitionSize = left.partitionSize().toSymbolReference();
@@ -584,7 +585,7 @@ public class ImplementTableFunctionSource
                         new ComparisonExpression(GREATER_THAN, rightRowNumber, leftPartitionSize),
                         new ComparisonExpression(EQUAL, leftRowNumber, new GenericLiteral("BIGINT", "1"))))));
 
-        JoinNode.Type joinType;
+        JoinType joinType;
         if (left.pruneWhenEmpty() && right.pruneWhenEmpty()) {
             joinType = INNER;
         }
@@ -605,8 +606,8 @@ public class ImplementTableFunctionSource
                         left.node(),
                         right.node(),
                         ImmutableList.of(),
-                        left.node().getOutputSymbols(),
-                        right.node().getOutputSymbols(),
+                        left.node().getOutputVariables(),
+                        right.node().getOutputVariables(),
                         false,
                         Optional.of(joinCondition),
                         Optional.empty(),
@@ -627,7 +628,7 @@ public class ImplementTableFunctionSource
                 right.rowNumberSymbolsMapping());
     }
 
-    private static NodeWithSymbols appendHelperSymbolsForJoinedNodes(JoinedNodes joinedNodes, Context context)
+    private static NodeWithVariables appendHelperSymbolsForJoinedNodes(JoinedNodes joinedNodes, Context context)
     {
         Expression leftRowNumber = joinedNodes.leftRowNumber().toSymbolReference();
         Expression leftPartitionSize = joinedNodes.leftPartitionSize().toSymbolReference();
@@ -635,7 +636,7 @@ public class ImplementTableFunctionSource
         Expression rightPartitionSize = joinedNodes.rightPartitionSize().toSymbolReference();
 
         // Derive row number for joined partitions: this is the bigger partition's row number. One of the combined values might be null as a result of outer join.
-        Symbol joinedRowNumber = context.getSymbolAllocator().newSymbol("combined_row_number", BIGINT);
+        VariableReferenceExpression joinedRowNumber = context.getVariableAllocator().newVariable("combined_row_number", BIGINT);
         Expression rowNumberExpression = new IfExpression(
                 new ComparisonExpression(
                         GREATER_THAN,
@@ -645,7 +646,7 @@ public class ImplementTableFunctionSource
                 rightRowNumber);
 
         // Derive partition size for joined partitions: this is the bigger partition's size. One of the combined values might be null as a result of outer join.
-        Symbol joinedPartitionSize = context.getSymbolAllocator().newSymbol("combined_partition_size", BIGINT);
+        VariableReferenceExpression joinedPartitionSize = context.getVariableAllocator().newVariable("combined_partition_size", BIGINT);
         Expression partitionSizeExpression = new IfExpression(
                 new ComparisonExpression(
                         GREATER_THAN,
@@ -658,37 +659,37 @@ public class ImplementTableFunctionSource
                 context.getIdAllocator().getNextId(),
                 joinedNodes.joinedNode(),
                 Assignments.builder()
-                        .putIdentities(joinedNodes.joinedNode().getOutputSymbols())
+                        .putIdentities(joinedNodes.joinedNode().getOutputVariables())
                         .put(joinedRowNumber, rowNumberExpression)
                         .put(joinedPartitionSize, partitionSizeExpression)
                         .build());
 
-        List<Symbol> joinedPartitionBy = ImmutableList.<Symbol>builder()
+        List<VariableReferenceExpression> joinedPartitionBy = ImmutableList.<VariableReferenceExpression>builder()
                 .addAll(joinedNodes.leftPartitionBy())
                 .addAll(joinedNodes.rightPartitionBy())
                 .build();
 
         boolean joinedPruneWhenEmpty = joinedNodes.leftPruneWhenEmpty() || joinedNodes.rightPruneWhenEmpty();
 
-        Map<Symbol, Symbol> joinedRowNumberSymbolsMapping = ImmutableMap.<Symbol, Symbol>builder()
+        Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<Symbol, Symbol>builder()
                 .putAll(joinedNodes.leftRowNumberSymbolsMapping())
                 .putAll(joinedNodes.rightRowNumberSymbolsMapping())
                 .buildOrThrow();
 
-        return new NodeWithSymbols(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy, joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
+        return new NodeWithVariables(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy, joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
     }
 
-    private static NodeWithMarkers appendMarkerSymbols(PlanNode node, Set<Symbol> symbols, Symbol referenceSymbol, Context context)
+    private static NodeWithMarkers appendMarkerSymbols(PlanNode node, Set<VariableReferenceExpression> variables, VariableReferenceExpression referenceSymbol, Context context)
     {
         Assignments.Builder assignments = Assignments.builder();
-        assignments.putIdentities(node.getOutputSymbols());
+        assignments.putIdentities(node.getOutputVariables());
 
-        ImmutableMap.Builder<Symbol, Symbol> symbolsToMarkers = ImmutableMap.builder();
+        ImmutableMap.Builder<VariableReferenceExpression, VariableReferenceExpression> variablesToMarkers = ImmutableMap.builder();
 
-        for (Symbol symbol : symbols) {
-            Symbol marker = context.getSymbolAllocator().newSymbol("marker", BIGINT);
-            symbolsToMarkers.put(symbol, marker);
-            Expression actual = symbol.toSymbolReference();
+        for (VariableReferenceExpression variable : variables) {
+            VariableReferenceExpression marker = context.getVariableAllocator().newVariable("marker", BIGINT);
+            variablesToMarkers.put(variable, marker);
+            Expression actual = variable.toSymbolReference();
             Expression reference = referenceSymbol.toSymbolReference();
             assignments.put(marker, new IfExpression(new ComparisonExpression(EQUAL, actual, reference), actual, new Cast(new NullLiteral(), toSqlType(BIGINT))));
         }
@@ -698,29 +699,40 @@ public class ImplementTableFunctionSource
                 node,
                 assignments.build());
 
-        return new NodeWithMarkers(project, symbolsToMarkers.buildOrThrow());
+        return new NodeWithMarkers(project, variablesToMarkers.buildOrThrow());
     }
 
-    private record SourceWithProperties(PlanNode source, TableArgumentProperties properties)
-    {
-        SourceWithProperties
-        {
-            requireNonNull(source, "source is null");
-            requireNonNull(properties, "properties is null");
+    private static class SourceWithProperties {
+        private final PlanNode source;
+        private final TableArgumentProperties properties;
+
+        public SourceWithProperties(PlanNode source, TableArgumentProperties properties) {
+            this.source = requireNonNull(source, "source is null");
+            this.properties = requireNonNull(properties, "properties is null");
+        }
+
+        public PlanNode source() {
+            return source;
+        }
+
+        public TableArgumentProperties properties() {
+            return properties;
         }
     }
 
-    public final class NodeWithVariables {
+    public final static class NodeWithVariables
+    {
         private final PlanNode node;
-        private final Symbol rowNumber;
-        private final Symbol partitionSize;
+        private final VariableReferenceExpression rowNumber;
+        private final VariableReferenceExpression partitionSize;
         private final List<VariableReferenceExpression> partitionBy;
         private final boolean pruneWhenEmpty;
         private final Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbolsMapping;
 
-        public NodeWithVariables(PlanNode node, Symbol rowNumber, Symbol partitionSize,
+        public NodeWithVariables(PlanNode node, VariableReferenceExpression rowNumber, VariableReferenceExpression partitionSize,
                                  List<VariableReferenceExpression> partitionBy, boolean pruneWhenEmpty,
-                                 Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbolsMapping) {
+                                 Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbolsMapping)
+        {
             this.node = requireNonNull(node, "node is null");
             this.rowNumber = requireNonNull(rowNumber, "rowNumber is null");
             this.partitionSize = requireNonNull(partitionSize, "partitionSize is null");
@@ -729,64 +741,103 @@ public class ImplementTableFunctionSource
             this.rowNumberSymbolsMapping = ImmutableMap.copyOf(rowNumberSymbolsMapping);
         }
 
-        public PlanNode getNode() {
+        public PlanNode node()
+        {
             return node;
         }
 
-        public Symbol getRowNumber() {
+        public VariableReferenceExpression rowNumber()
+        {
             return rowNumber;
         }
 
-        public Symbol getPartitionSize() {
+        public VariableReferenceExpression partitionSize()
+        {
             return partitionSize;
         }
 
-        public List<VariableReferenceExpression> getPartitionBy() {
+        public List<VariableReferenceExpression> partitionBy()
+        {
             return partitionBy;
         }
 
-        public boolean isPruneWhenEmpty() {
+        public boolean pruneWhenEmpty()
+        {
             return pruneWhenEmpty;
         }
 
-        public Map<VariableReferenceExpression, VariableReferenceExpression> getRowNumberSymbolsMapping() {
+        public Map<VariableReferenceExpression, VariableReferenceExpression> rowNumberSymbolsMapping()
+        {
             return rowNumberSymbolsMapping;
         }
     }
 
-    private record JoinedNodes(
-            PlanNode joinedNode,
-            Symbol leftRowNumber,
-            Symbol leftPartitionSize,
-            List<Symbol> leftPartitionBy,
-            boolean leftPruneWhenEmpty,
-            Map<Symbol, Symbol> leftRowNumberSymbolsMapping,
-            Symbol rightRowNumber,
-            Symbol rightPartitionSize,
-            List<Symbol> rightPartitionBy,
-            boolean rightPruneWhenEmpty,
-            Map<Symbol, Symbol> rightRowNumberSymbolsMapping)
-    {
-        JoinedNodes
-        {
-            requireNonNull(joinedNode, "joinedNode is null");
-            requireNonNull(leftRowNumber, "leftRowNumber is null");
-            requireNonNull(leftPartitionSize, "leftPartitionSize is null");
-            leftPartitionBy = ImmutableList.copyOf(leftPartitionBy);
-            leftRowNumberSymbolsMapping = ImmutableMap.copyOf(leftRowNumberSymbolsMapping);
-            requireNonNull(rightRowNumber, "rightRowNumber is null");
-            requireNonNull(rightPartitionSize, "rightPartitionSize is null");
-            rightPartitionBy = ImmutableList.copyOf(rightPartitionBy);
-            rightRowNumberSymbolsMapping = ImmutableMap.copyOf(rightRowNumberSymbolsMapping);
+    private static class JoinedNodes {
+        private final PlanNode joinedNode;
+        private final VariableReferenceExpression leftRowNumber;
+        private final VariableReferenceExpression leftPartitionSize;
+        private final List<VariableReferenceExpression> leftPartitionBy;
+        private final boolean leftPruneWhenEmpty;
+        private final Map<VariableReferenceExpression, VariableReferenceExpression> leftRowNumberSymbolsMapping;
+        private final VariableReferenceExpression rightRowNumber;
+        private final VariableReferenceExpression rightPartitionSize;
+        private final List<VariableReferenceExpression> rightPartitionBy;
+        private final boolean rightPruneWhenEmpty;
+        private final Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping;
+
+        public JoinedNodes(
+                PlanNode joinedNode,
+                VariableReferenceExpression leftRowNumber,
+                VariableReferenceExpression leftPartitionSize,
+                List<VariableReferenceExpression> leftPartitionBy,
+                boolean leftPruneWhenEmpty,
+                Map<VariableReferenceExpression, VariableReferenceExpression> leftRowNumberSymbolsMapping,
+                VariableReferenceExpression rightRowNumber,
+                VariableReferenceExpression rightPartitionSize,
+                List<VariableReferenceExpression> rightPartitionBy,
+                boolean rightPruneWhenEmpty,
+                Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping) {
+            this.joinedNode = requireNonNull(joinedNode, "joinedNode is null");
+            this.leftRowNumber = requireNonNull(leftRowNumber, "leftRowNumber is null");
+            this.leftPartitionSize = requireNonNull(leftPartitionSize, "leftPartitionSize is null");
+            this.leftPartitionBy = ImmutableList.copyOf(requireNonNull(leftPartitionBy, "leftPartitionBy is null"));
+            this.leftPruneWhenEmpty = leftPruneWhenEmpty;
+            this.leftRowNumberSymbolsMapping = ImmutableMap.copyOf(requireNonNull(leftRowNumberSymbolsMapping, "leftRowNumberSymbolsMapping is null"));
+            this.rightRowNumber = requireNonNull(rightRowNumber, "rightRowNumber is null");
+            this.rightPartitionSize = requireNonNull(rightPartitionSize, "rightPartitionSize is null");
+            this.rightPartitionBy = ImmutableList.copyOf(requireNonNull(rightPartitionBy, "rightPartitionBy is null"));
+            this.rightPruneWhenEmpty = rightPruneWhenEmpty;
+            this.rightRowNumberSymbolsMapping = ImmutableMap.copyOf(requireNonNull(rightRowNumberSymbolsMapping, "rightRowNumberSymbolsMapping is null"));
         }
+
+        public PlanNode joinedNode() { return joinedNode; }
+        public VariableReferenceExpression leftRowNumber() { return leftRowNumber; }
+        public VariableReferenceExpression leftPartitionSize() { return leftPartitionSize; }
+        public List<VariableReferenceExpression> leftPartitionBy() { return leftPartitionBy; }
+        public boolean leftPruneWhenEmpty() { return leftPruneWhenEmpty; }
+        public Map<VariableReferenceExpression, VariableReferenceExpression> leftRowNumberSymbolsMapping() { return leftRowNumberSymbolsMapping; }
+        public VariableReferenceExpression rightRowNumber() { return rightRowNumber; }
+        public VariableReferenceExpression rightPartitionSize() { return rightPartitionSize; }
+        public List<VariableReferenceExpression> rightPartitionBy() { return rightPartitionBy; }
+        public boolean rightPruneWhenEmpty() { return rightPruneWhenEmpty; }
+        public Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping() { return rightRowNumberSymbolsMapping; }
     }
 
-    private record NodeWithMarkers(PlanNode node, Map<Symbol, Symbol> symbolToMarker)
-    {
-        NodeWithMarkers
-        {
-            requireNonNull(node, "node is null");
-            symbolToMarker = ImmutableMap.copyOf(symbolToMarker);
+    private static class NodeWithMarkers {
+        private final PlanNode node;
+        private final Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker;
+
+        public NodeWithMarkers(PlanNode node, Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker) {
+            this.node = requireNonNull(node, "node is null");
+            this.variableToMarker = ImmutableMap.copyOf(requireNonNull(variableToMarker, "symbolToMarker is null"));
+        }
+
+        public PlanNode node() {
+            return node;
+        }
+
+        public Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker() {
+            return variableToMarker;
         }
     }
 }

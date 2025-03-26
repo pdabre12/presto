@@ -147,7 +147,7 @@ public class TableFunctionMatcher
             }
         }
 
-        if (properOutputs.size() != tableFunctionNode.getProperOutput().size()) {
+        if (properOutputs.size() != tableFunctionNode.getProperOutputs().size()) {
             return NO_MATCH;
         }
 
