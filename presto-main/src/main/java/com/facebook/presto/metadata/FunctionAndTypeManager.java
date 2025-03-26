@@ -52,6 +52,9 @@ import com.facebook.presto.spi.function.SqlFunction;
 import com.facebook.presto.spi.function.SqlFunctionId;
 import com.facebook.presto.spi.function.SqlFunctionSupplier;
 import com.facebook.presto.spi.function.SqlInvokedFunction;
+import com.facebook.presto.spi.tvf.TVFProvider;
+import com.facebook.presto.spi.tvf.TVFProviderContext;
+import com.facebook.presto.spi.tvf.TVFProviderFactory;
 import com.facebook.presto.sql.analyzer.FeaturesConfig;
 import com.facebook.presto.sql.analyzer.FunctionAndTypeResolver;
 import com.facebook.presto.sql.analyzer.FunctionsConfig;
@@ -65,6 +68,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.weakref.jmx.Managed;
@@ -124,6 +128,7 @@ public class FunctionAndTypeManager
 {
     private static final Pattern DEFAULT_NAMESPACE_PREFIX_PATTERN = Pattern.compile("[a-z]+\\.[a-z]+");
     private final TransactionManager transactionManager;
+    private final TableFunctionRegistry tableFunctionRegistry;
     private final BlockEncodingSerde blockEncodingSerde;
     private final BuiltInTypeAndFunctionNamespaceManager builtInTypeAndFunctionNamespaceManager;
     private final FunctionInvokerProvider functionInvokerProvider;
@@ -136,10 +141,13 @@ public class FunctionAndTypeManager
     private final CacheStatsMBean cacheStatsMBean;
     private final boolean nativeExecution;
     private final CatalogSchemaName defaultNamespace;
+    private final Map<String, TVFProviderFactory> tvfProviderFactories = new ConcurrentHashMap<>();
+    private final Map<String, TVFProvider> tvfProviders = new ConcurrentHashMap<>();
 
     @Inject
     public FunctionAndTypeManager(
             TransactionManager transactionManager,
+            TableFunctionRegistry tableFunctionRegistry,
             BlockEncodingSerde blockEncodingSerde,
             FeaturesConfig featuresConfig,
             FunctionsConfig functionsConfig,
@@ -147,6 +155,7 @@ public class FunctionAndTypeManager
             Set<Type> types)
     {
         this.transactionManager = requireNonNull(transactionManager, "transactionManager is null");
+        this.tableFunctionRegistry = requireNonNull(tableFunctionRegistry, "tableFunctionRegistry is null");
         this.blockEncodingSerde = requireNonNull(blockEncodingSerde, "blockEncodingSerde is null");
         this.builtInTypeAndFunctionNamespaceManager = new BuiltInTypeAndFunctionNamespaceManager(blockEncodingSerde, functionsConfig, types, this);
         this.functionNamespaceManagers.put(JAVA_BUILTIN_NAMESPACE.getCatalogName(), builtInTypeAndFunctionNamespaceManager);
@@ -170,6 +179,7 @@ public class FunctionAndTypeManager
     {
         return new FunctionAndTypeManager(
                 createTestTransactionManager(),
+                new TableFunctionRegistry(),
                 new BlockEncodingManager(),
                 new FeaturesConfig(),
                 new FunctionsConfig(),
@@ -308,6 +318,32 @@ public class FunctionAndTypeManager
         }
     }
 
+    public void loadTVFProvider(String tvfProviderName, NodeManager nodeManager)
+    {
+        requireNonNull(tvfProviderName, "tvfProviderName is null");
+        TVFProviderFactory factory = tvfProviderFactories.get(tvfProviderName);
+        checkState(factory != null, "No factory for tvf provider %s", tvfProviderName);
+        TVFProvider tvfProvider = factory.createTVFProvider(ImmutableMap.of(), new TVFProviderContext(nodeManager));
+
+        if (tvfProviders.putIfAbsent(tvfProviderName, tvfProvider) != null) {
+            throw new IllegalArgumentException(format("TVF provider [%s] is already registered", tvfProvider));
+        }
+    }
+
+    public void loadTVFProviders(NodeManager nodeManager)
+    {
+        for (String tvfProviderName : tvfProviderFactories.keySet()) {
+            loadTVFProvider(tvfProviderName, nodeManager);
+        }
+    }
+
+    public void addTVFProviderFactory(TVFProviderFactory factory)
+    {
+        if (tvfProviderFactories.putIfAbsent(factory.getName(), factory) != null) {
+            throw new IllegalArgumentException(format("TVF provider '%s' is already registered", factory.getName()));
+        }
+    }
+
     @Override
     public FunctionMetadata getFunctionMetadata(FunctionHandle functionHandle)
     {
@@ -362,6 +398,16 @@ public class FunctionAndTypeManager
             throw new IllegalArgumentException(format("Resource group configuration manager '%s' is already registered", factory.getName()));
         }
         handleResolver.addFunctionNamespace(factory.getName(), factory.getHandleResolver());
+    }
+
+    public TableFunctionRegistry getTableFunctionRegistry()
+    {
+        return tableFunctionRegistry;
+    }
+
+    public TransactionManager getTransactionManager()
+    {
+        return transactionManager;
     }
 
     public void registerBuiltInFunctions(List<? extends SqlFunction> functions)
