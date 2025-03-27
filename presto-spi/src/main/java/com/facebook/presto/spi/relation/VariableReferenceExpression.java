@@ -15,9 +15,6 @@ package com.facebook.presto.spi.relation;
 
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.spi.SourceLocation;
-import com.facebook.presto.sql.tree.Expression;
-import com.facebook.presto.sql.tree.NodeLocation;
-import com.facebook.presto.sql.tree.SymbolReference;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -113,11 +110,5 @@ public final class VariableReferenceExpression
             return nameComparison;
         }
         return type.getTypeSignature().toString().compareTo(o.type.getTypeSignature().toString());
-    }
-
-    public SymbolReference toSymbolReference()
-    {
-        return new SymbolReference(getSourceLocation().map(location -> new NodeLocation(location.getLine(), location.getColumn())),
-                getName());
     }
 }

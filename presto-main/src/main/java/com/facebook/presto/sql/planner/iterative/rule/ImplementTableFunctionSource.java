@@ -14,6 +14,7 @@
 package com.facebook.presto.sql.planner.iterative.rule;
 
 
+import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.matching.Captures;
 import com.facebook.presto.matching.Pattern;
@@ -32,6 +33,7 @@ import com.facebook.presto.spi.plan.WindowNode.Frame;
 import com.facebook.presto.spi.relation.CallExpression;
 import com.facebook.presto.spi.relation.RowExpression;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
+import com.facebook.presto.sql.planner.QueryPlanner;
 import com.facebook.presto.sql.planner.SqlPlannerContext;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.iterative.Rule;
@@ -61,7 +63,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
 import jdk.nashorn.internal.codegen.FunctionSignature;
-import org.apache.ratis.thirdparty.org.checkerframework.checker.nullness.Opt;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -82,6 +83,7 @@ import static com.facebook.presto.spi.plan.JoinType.RIGHT;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_PRECEDING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_FOLLOWING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.WindowType.ROWS;
+import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.facebook.presto.sql.planner.TranslateExpressionsUtil.toRowExpression;
 import static com.facebook.presto.sql.planner.plan.Patterns.tableFunction;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.EQUAL;
@@ -406,15 +408,15 @@ public class ImplementTableFunctionSource
         // Co-partitioning tables with empty partition by would be ineffective.
         checkState(!left.partitionBy().isEmpty(), "co-partitioned tables must have partitioning columns");
 
-        Expression leftRowNumber = left.rowNumber().toSymbolReference();
-        Expression leftPartitionSize = left.partitionSize().toSymbolReference();
+        Expression leftRowNumber = toSymbolReference(left.rowNumber());
+        Expression leftPartitionSize = toSymbolReference(left.partitionSize());
         List<Expression> leftPartitionBy = left.partitionBy().stream()
-                .map(VariableReferenceExpression::toSymbolReference)
+                .map(QueryPlanner::toSymbolReference)
                 .collect(toImmutableList());
-        Expression rightRowNumber = right.rowNumber().toSymbolReference();
-        Expression rightPartitionSize = right.partitionSize().toSymbolReference();
+        Expression rightRowNumber = toSymbolReference(right.rowNumber());
+        Expression rightPartitionSize = toSymbolReference(right.partitionSize());
         List<Expression> rightPartitionBy = right.partitionBy().stream()
-                .map(VariableReferenceExpression::toSymbolReference)
+                .map(QueryPlanner::toSymbolReference)
                 .collect(toImmutableList());
 
         List<Expression> copartitionConjuncts = Streams.zip(
@@ -533,10 +535,10 @@ public class ImplementTableFunctionSource
     {
         checkArgument(copartitionedNodes.leftPartitionBy().size() == copartitionedNodes.rightPartitionBy().size(), "co-partitioning lists do not match");
 
-        Expression leftRowNumber = copartitionedNodes.leftRowNumber().toSymbolReference();
-        Expression leftPartitionSize = copartitionedNodes.leftPartitionSize().toSymbolReference();
-        Expression rightRowNumber = copartitionedNodes.rightRowNumber().toSymbolReference();
-        Expression rightPartitionSize = copartitionedNodes.rightPartitionSize().toSymbolReference();
+        Expression leftRowNumber = toSymbolReference(copartitionedNodes.leftRowNumber());
+        Expression leftPartitionSize = toSymbolReference(copartitionedNodes.leftPartitionSize());
+        Expression rightRowNumber = toSymbolReference(copartitionedNodes.rightRowNumber());
+        Expression rightPartitionSize = toSymbolReference(copartitionedNodes.rightPartitionSize());
 
         // Derive row number for joined partitions: this is the bigger partition's row number. One of the combined values might be null as a result of outer join.
         VariableReferenceExpression joinedRowNumber = context.getVariableAllocator().newVariable("combined_row_number", BIGINT);
@@ -569,7 +571,7 @@ public class ImplementTableFunctionSource
             Type type = context.getVariableAllocator().getVariables().get(leftColumn.getName());
 
             VariableReferenceExpression joinedColumn = context.getVariableAllocator().newVariable("combined_partition_column", type);
-            joinedPartitionByAssignments.put(joinedColumn, new CoalesceExpression(leftColumn.toSymbolReference(), rightColumn.toSymbolReference()));
+            joinedPartitionByAssignments.put(joinedColumn, new CoalesceExpression(toSymbolReference(leftColumn), toSymbolReference(rightColumn)));
             joinedPartitionBy.add(joinedColumn);
         }
 
@@ -606,10 +608,10 @@ public class ImplementTableFunctionSource
 
     private static JoinedNodes join(NodeWithVariables left, NodeWithVariables right, Context context)
     {
-        Expression leftRowNumber = left.rowNumber().toSymbolReference();
-        Expression leftPartitionSize = left.partitionSize().toSymbolReference();
-        Expression rightRowNumber = right.rowNumber().toSymbolReference();
-        Expression rightPartitionSize = right.partitionSize().toSymbolReference();
+        Expression leftRowNumber = toSymbolReference(left.rowNumber());
+        Expression leftPartitionSize = toSymbolReference(left.partitionSize());
+        Expression rightRowNumber = toSymbolReference(right.rowNumber());
+        Expression rightPartitionSize = toSymbolReference(right.partitionSize());
 
         // Align rows from left and right source according to row number. Because every partition is row-numbered, this produces cartesian product of partitions.
         // If one or both sources are ordered, the row number reflects the ordering.
@@ -677,10 +679,10 @@ public class ImplementTableFunctionSource
 
     private static NodeWithVariables appendHelperSymbolsForJoinedNodes(JoinedNodes joinedNodes, Context context)
     {
-        Expression leftRowNumber = joinedNodes.leftRowNumber().toSymbolReference();
-        Expression leftPartitionSize = joinedNodes.leftPartitionSize().toSymbolReference();
-        Expression rightRowNumber = joinedNodes.rightRowNumber().toSymbolReference();
-        Expression rightPartitionSize = joinedNodes.rightPartitionSize().toSymbolReference();
+        Expression leftRowNumber = toSymbolReference(joinedNodes.leftRowNumber());
+        Expression leftPartitionSize = toSymbolReference(joinedNodes.leftPartitionSize());
+        Expression rightRowNumber = toSymbolReference(joinedNodes.rightRowNumber());
+        Expression rightPartitionSize = toSymbolReference(joinedNodes.rightPartitionSize());
 
         // Derive row number for joined partitions: this is the bigger partition's row number. One of the combined values might be null as a result of outer join.
         VariableReferenceExpression joinedRowNumber = context.getVariableAllocator().newVariable("combined_row_number", BIGINT);
@@ -736,9 +738,9 @@ public class ImplementTableFunctionSource
         for (VariableReferenceExpression variable : variables) {
             VariableReferenceExpression marker = context.getVariableAllocator().newVariable("marker", BIGINT);
             variablesToMarkers.put(variable, marker);
-            Expression actual = variable.toSymbolReference();
-            Expression reference = referenceSymbol.toSymbolReference();
-            assignments.put(marker, new IfExpression(new ComparisonExpression(EQUAL, actual, reference), actual, new Cast(new NullLiteral(), toSqlType(BIGINT))));
+            Expression actual = toSymbolReference(variable);
+            Expression reference = toSymbolReference(referenceSymbol);
+            assignments.put(marker, new IfExpression(new ComparisonExpression(EQUAL, actual, reference), actual, new Cast(new NullLiteral(), StandardTypes.BIGINT)));
         }
 
         PlanNode project = new ProjectNode(
