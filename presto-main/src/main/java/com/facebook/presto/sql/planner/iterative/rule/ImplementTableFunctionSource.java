@@ -51,7 +51,7 @@ import com.facebook.presto.sql.tree.ComparisonExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.GenericLiteral;
 import com.facebook.presto.sql.tree.IfExpression;
-//import com.facebook.presto.sql.tree.LogicalExpression;
+import com.facebook.presto.sql.tree.LogicalBinaryExpression;
 import com.facebook.presto.sql.tree.NotExpression;
 import com.facebook.presto.sql.tree.NullLiteral;
 import com.facebook.presto.sql.tree.QualifiedName;
@@ -436,19 +436,18 @@ public class ImplementTableFunctionSource
         //      (R1 > S2 AND R2 = 1)
         //      OR
         //      (R2 > S1 AND R1 = 1))
-        Expression joinCondition = new LogicalExpression(
-                AND,
-                ImmutableList.<Expression>builder()
-                        .addAll(copartitionConjuncts)
-                        .add(new LogicalExpression(OR, ImmutableList.of(
+        Expression joinCondition = copartitionConjuncts.stream()
+                .reduce(
+                        new LogicalBinaryExpression(OR,
                                 new ComparisonExpression(EQUAL, leftRowNumber, rightRowNumber),
-                                new LogicalExpression(AND, ImmutableList.of(
-                                        new ComparisonExpression(GREATER_THAN, leftRowNumber, rightPartitionSize),
-                                        new ComparisonExpression(EQUAL, rightRowNumber, new GenericLiteral("BIGINT", "1")))),
-                                new LogicalExpression(AND, ImmutableList.of(
-                                        new ComparisonExpression(GREATER_THAN, rightRowNumber, leftPartitionSize),
-                                        new ComparisonExpression(EQUAL, leftRowNumber, new GenericLiteral("BIGINT", "1")))))))
-                        .build());
+                                new LogicalBinaryExpression(OR,
+                                        new LogicalBinaryExpression(AND,
+                                                new ComparisonExpression(GREATER_THAN, leftRowNumber, rightPartitionSize),
+                                                new ComparisonExpression(EQUAL, rightRowNumber, new GenericLiteral("BIGINT", "1"))),
+                                        new LogicalBinaryExpression(AND,
+                                                new ComparisonExpression(GREATER_THAN, rightRowNumber, leftPartitionSize),
+                                                new ComparisonExpression(EQUAL, leftRowNumber, new GenericLiteral("BIGINT", "1"))))),
+                        (expr, conjuct) -> new LogicalBinaryExpression(AND, conjuct, expr));
 
         // The join type depends on the prune when empty property of the sources.
         // If a source is prune when empty, we should not process any co-partition which is not present in this source,
@@ -622,14 +621,15 @@ public class ImplementTableFunctionSource
         // (R1 > S2 AND R2 = 1)
         // OR
         // (R2 > S1 AND R1 = 1)
-        Expression joinCondition = new LogicalExpression(OR, ImmutableList.of(
+        Expression joinCondition = new LogicalBinaryExpression(OR,
                 new ComparisonExpression(EQUAL, leftRowNumber, rightRowNumber),
-                new LogicalExpression(AND, ImmutableList.of(
-                        new ComparisonExpression(GREATER_THAN, leftRowNumber, rightPartitionSize),
-                        new ComparisonExpression(EQUAL, rightRowNumber, new GenericLiteral("BIGINT", "1")))),
-                new LogicalExpression(AND, ImmutableList.of(
-                        new ComparisonExpression(GREATER_THAN, rightRowNumber, leftPartitionSize),
-                        new ComparisonExpression(EQUAL, leftRowNumber, new GenericLiteral("BIGINT", "1"))))));
+                new LogicalBinaryExpression(OR,
+                        new LogicalBinaryExpression(AND,
+                                new ComparisonExpression(GREATER_THAN, leftRowNumber, rightPartitionSize),
+                                new ComparisonExpression(EQUAL, rightRowNumber, new GenericLiteral("BIGINT", "1"))),
+                        new LogicalBinaryExpression(AND,
+                                new ComparisonExpression(GREATER_THAN, rightRowNumber, leftPartitionSize),
+                                new ComparisonExpression(EQUAL, leftRowNumber, new GenericLiteral("BIGINT", "1")))));
 
         JoinType joinType;
         if (left.pruneWhenEmpty() && right.pruneWhenEmpty()) {
