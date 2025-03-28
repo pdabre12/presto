@@ -36,13 +36,13 @@ import java.util.Optional;
 import java.util.Set;
 
 import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
+import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
+import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
-import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
-import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static java.util.Objects.requireNonNull;
 
 public class TableFunctionProcessorMatcher

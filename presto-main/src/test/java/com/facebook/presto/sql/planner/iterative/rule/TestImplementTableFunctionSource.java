@@ -13,43 +13,27 @@
  */
 package com.facebook.presto.sql.planner.iterative.rule;
 
+import com.facebook.presto.spi.plan.DataOrganizationSpecification;
 import com.facebook.presto.spi.plan.Ordering;
 import com.facebook.presto.spi.plan.OrderingScheme;
-import com.facebook.presto.spi.plan.DataOrganizationSpecification;
-import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
-
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
+import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
 import com.facebook.presto.sql.planner.iterative.rule.test.BaseRuleTest;
+import com.facebook.presto.sql.planner.plan.TableFunctionNode;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughColumn;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecification;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.TableArgumentProperties;
-
-import com.facebook.presto.sql.planner.plan.TableFunctionNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.Test;
 
-
 import java.util.Optional;
 
 import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
-import static com.facebook.presto.common.block.SortOrder.DESC_NULLS_FIRST;
-import static com.facebook.presto.common.type.IntegerType.INTEGER;
-import static com.facebook.presto.common.type.TinyintType.TINYINT;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.functionCall;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.specification;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableFunctionProcessor;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.values;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.window;
-import static com.facebook.presto.spi.plan.JoinType.FULL;
-import static com.facebook.presto.spi.plan.JoinType.INNER;
-import static com.facebook.presto.spi.plan.JoinType.LEFT;
-
 
 public class TestImplementTableFunctionSource
         extends BaseRuleTest
@@ -68,7 +52,6 @@ public class TestImplementTableFunctionSource
                         .name("test_function")
                         .properOutputs(ImmutableList.of("a"))));
     }
-
 
     @Test
     public void testSingleSourceWithRowSemantics()
@@ -266,8 +249,7 @@ public class TestImplementTableFunctionSource
                                                         .filter(
                                                                 "input_1_row_number = input_2_row_number OR " +
                                                                 " input_1_row_number > input_2_partition_size AND input_2_row_number = BIGINT '1' OR " +
-                                                                " input_2_row_number > input_1_partition_size AND input_1_row_number = BIGINT '1'"
-                                                                )
+                                                                " input_2_row_number > input_1_partition_size AND input_1_row_number = BIGINT '1'")
                                                         .left(window(// append helper symbols for source input_1
                                                                 builder -> builder
                                                                         .specification(specification(ImmutableList.of("c"), ImmutableList.of(), ImmutableMap.of()))
