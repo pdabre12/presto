@@ -19,9 +19,11 @@ import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.plan.DataOrganizationSpecification;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
+import com.facebook.presto.sql.planner.QueryPlanner;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughColumn;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecification;
 import com.facebook.presto.sql.planner.plan.TableFunctionProcessorNode;
+import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -30,9 +32,11 @@ import com.google.common.collect.ImmutableSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -89,11 +93,11 @@ public class TableFunctionProcessorMatcher
         Set<SymbolReference> expectedPassThrough = passThroughSymbols.stream()
                 .map(symbolAliases::get)
                 .collect(toImmutableSet());
-        Set<SymbolReference> actualPassThrough = tableFunctionProcessorNode.getPassThroughSpecifications().stream()
+        Set<Expression> actualPassThrough = tableFunctionProcessorNode.getPassThroughSpecifications().stream()
                 .map(PassThroughSpecification::getColumns)
                 .flatMap(Collection::stream)
                 .map(PassThroughColumn::getOutputVariables)
-                .map(VariableReferenceExpression::toSymbolReference)
+                .map(QueryPlanner::toSymbolReference)
                 .collect(toImmutableSet());
         if (!expectedPassThrough.equals(actualPassThrough)) {
             return NO_MATCH;
@@ -105,8 +109,8 @@ public class TableFunctionProcessorMatcher
         if (markerSymbols.isPresent()) {
             Map<SymbolReference, SymbolReference> expectedMapping = markerSymbols.get().entrySet().stream()
                     .collect(toImmutableMap(entry -> symbolAliases.get(entry.getKey()), entry -> symbolAliases.get(entry.getValue())));
-            Map<SymbolReference, SymbolReference> actualMapping = tableFunctionProcessorNode.getMarkerVariables().get().entrySet().stream()
-                    .collect(toImmutableMap(entry -> entry.getKey().toSymbolReference(), entry -> entry.getValue().toSymbolReference()));
+            Map<Expression, Expression> actualMapping = tableFunctionProcessorNode.getMarkerVariables().get().entrySet().stream()
+                    .collect(toImmutableMap(entry -> toSymbolReference(entry.getKey()), entry -> toSymbolReference(entry.getValue())));
             if (!expectedMapping.equals(actualMapping)) {
                 return NO_MATCH;
             }
@@ -116,14 +120,14 @@ public class TableFunctionProcessorMatcher
             return NO_MATCH;
         }
         if (specification.isPresent()) {
-            if (!specification.get().getExpectedValue(symbolAliases).equals(tableFunctionProcessorNode.getSpecification().orElseThrow())) {
+            if (!specification.get().getExpectedValue(symbolAliases).equals(tableFunctionProcessorNode.getSpecification().orElseThrow(NoSuchElementException::new))) {
                 return NO_MATCH;
             }
         }
 
         ImmutableMap.Builder<String, SymbolReference> properOutputsMapping = ImmutableMap.builder();
         for (int i = 0; i < properOutputs.size(); i++) {
-            properOutputsMapping.put(properOutputs.get(i), tableFunctionProcessorNode.getProperOutputs().get(i).toSymbolReference());
+            properOutputsMapping.put(properOutputs.get(i), toSymbolReference(tableFunctionProcessorNode.getProperOutputs().get(i)));
         }
 
         return match(SymbolAliases.builder()

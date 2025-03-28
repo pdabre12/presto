@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.stream.IntStream;
 
+import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
@@ -139,7 +140,7 @@ public class TableFunctionMatcher
                         .map(symbolAliases::get)
                         .collect(toImmutableSet());
                 Set<SymbolReference> actualPassThrough = argumentProperties.getPassThroughSpecification().getColumns().stream()
-                        .map(var -> var.getOutputVariables().toSymbolReference())
+                        .map(var -> toSymbolReference(var.getOutputVariables()))
                         .collect(toImmutableSet());
                 if (!expectedPassThrough.equals(actualPassThrough)) {
                     return NO_MATCH;

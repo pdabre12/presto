@@ -1367,7 +1367,7 @@ public class QueryPlanner
                 .collect(toImmutableList());
     }
 
-    public static Expression toSymbolReference(VariableReferenceExpression variable)
+    public static SymbolReference toSymbolReference(VariableReferenceExpression variable)
     {
         return new SymbolReference(variable.getSourceLocation().map(location -> new NodeLocation(location.getLine(), location.getColumn())), variable.getName());
     }

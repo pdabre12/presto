@@ -14,7 +14,6 @@
 package com.facebook.presto.sql.planner.iterative.rule;
 
 
-import com.facebook.presto.Session;
 import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.matching.Captures;
@@ -22,7 +21,6 @@ import com.facebook.presto.matching.Pattern;
 import com.facebook.presto.metadata.FunctionAndTypeManager;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.SourceLocation;
-import com.facebook.presto.spi.VariableAllocator;
 import com.facebook.presto.spi.function.FunctionHandle;
 import com.facebook.presto.spi.function.FunctionMetadata;
 import com.facebook.presto.spi.plan.EquiJoinClause;
@@ -33,11 +31,10 @@ import com.facebook.presto.spi.plan.OrderingScheme;
 import com.facebook.presto.spi.plan.WindowNode;
 import com.facebook.presto.spi.plan.WindowNode.Frame;
 import com.facebook.presto.spi.relation.CallExpression;
+import com.facebook.presto.spi.relation.ConstantExpression;
 import com.facebook.presto.spi.relation.RowExpression;
-import com.facebook.presto.spi.relation.SpecialFormExpression;
+import com.facebook.presto.spi.relation.RowExpressionVisitor;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
-import com.facebook.presto.sql.analyzer.Analysis;
-import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.planner.QueryPlanner;
 import com.facebook.presto.sql.planner.SqlPlannerContext;
 import com.facebook.presto.sql.planner.Symbol;
@@ -52,7 +49,6 @@ import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecifi
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.TableArgumentProperties;
 import com.facebook.presto.sql.planner.plan.TableFunctionProcessorNode;
 
-import com.facebook.presto.sql.relational.SqlToRowExpressionTranslator;
 import com.facebook.presto.sql.tree.Cast;
 import com.facebook.presto.sql.tree.CoalesceExpression;
 import com.facebook.presto.sql.tree.ComparisonExpression;
@@ -75,6 +71,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -83,8 +80,6 @@ import java.util.stream.Stream;
 
 import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
-import static com.facebook.presto.common.type.BooleanType.BOOLEAN;
-import static com.facebook.presto.expressions.LogicalRowExpressions.FALSE_CONSTANT;
 import static com.facebook.presto.spi.plan.JoinType.FULL;
 import static com.facebook.presto.spi.plan.JoinType.INNER;
 import static com.facebook.presto.spi.plan.JoinType.LEFT;
@@ -92,13 +87,9 @@ import static com.facebook.presto.spi.plan.JoinType.RIGHT;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_PRECEDING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_FOLLOWING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.WindowType.ROWS;
-import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.COALESCE;
-import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.IF;
-import static com.facebook.presto.sql.planner.PlannerUtils.coalesce;
 import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.facebook.presto.sql.planner.TranslateExpressionsUtil.toRowExpression;
 import static com.facebook.presto.sql.planner.plan.Patterns.tableFunction;
-import static com.facebook.presto.sql.relational.Expressions.specialForm;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.EQUAL;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.GREATER_THAN;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.IS_DISTINCT_FROM;
@@ -176,20 +167,10 @@ public class ImplementTableFunctionSource
     private static final DataOrganizationSpecification UNORDERED_SINGLE_PARTITION = new DataOrganizationSpecification(ImmutableList.of(), Optional.empty());
 
     private final Metadata metadata;
-    private final Session session;
-    private final SqlParser sqlParser;
-    private final VariableAllocator variableAllocator;
-    private final Analysis analysis;
-    private final SqlPlannerContext sqlContext;
 
-    public ImplementTableFunctionSource(Metadata metadata, Session session, SqlParser sqlParser, VariableAllocator variableAllocator, Analysis analysis, sqlContext context)
+    public ImplementTableFunctionSource(Metadata metadata)
     {
         this.metadata = requireNonNull(metadata, "metadata is null");
-        this.session = requireNonNull(session, "session is null");
-        this.sqlParser = requireNonNull(sqlParser, "sqlParser is null");
-        this.variableAllocator = requireNonNull(variableAllocator, "variableAllocator is null");
-        this.analysis = requireNonNull(analysis, "analysis is null");
-        this.sqlContext = requireNonNull(context, "context is null");
     }
 
     @Override
@@ -396,7 +377,7 @@ public class ImplementTableFunctionSource
         return new NodeWithVariables(window, rowNumber, partitionSize, specification.getPartitionBy(), argumentProperties.pruneWhenEmpty(), rowNumberSymbolMapping);
     }
 
-    private NodeWithVariables copartition(
+    private static NodeWithVariables copartition(
             List<SourceWithProperties> sourceList,
             CallExpression rowNumberFunction,
             CallExpression countFunction,
@@ -423,7 +404,7 @@ public class ImplementTableFunctionSource
         return appendHelperSymbolsForCopartitionedNodes(copartitioned, context);
     }
 
-    private JoinedNodes copartition(NodeWithVariables left, NodeWithVariables right, Context context)
+    private static JoinedNodes copartition(NodeWithVariables left, NodeWithVariables right, Context context)
     {
         checkArgument(left.partitionBy().size() == right.partitionBy().size(), "co-partitioning lists do not match");
 
@@ -534,7 +515,8 @@ public class ImplementTableFunctionSource
                         Stream.concat(left.node().getOutputVariables().stream(),
                                         right.node().getOutputVariables().stream())
                                 .collect(Collectors.toList()),
-                        Optional.of(rowExpression(joinCondition, context)),
+//                        Optional.of(joinCondition),
+                        Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
@@ -551,7 +533,7 @@ public class ImplementTableFunctionSource
                 right.rowNumberSymbolsMapping());
     }
 
-    private NodeWithVariables appendHelperSymbolsForCopartitionedNodes(
+    private static NodeWithVariables appendHelperSymbolsForCopartitionedNodes(
             JoinedNodes copartitionedNodes,
             Context context)
     {
@@ -593,19 +575,19 @@ public class ImplementTableFunctionSource
             Type type = context.getVariableAllocator().getVariables().get(leftColumn.getName());
 
             VariableReferenceExpression joinedColumn = context.getVariableAllocator().newVariable("combined_partition_column", type);
-            joinedPartitionByAssignments.put(joinedColumn, coalesce(ImmutableList.of(leftColumn, rightColumn)));
+            joinedPartitionByAssignments.put(joinedColumn, castToRowExpression(new CoalesceExpression(toSymbolReference(leftColumn), toSymbolReference(rightColumn))));
             joinedPartitionBy.add(joinedColumn);
         }
 
         PlanNode project = new ProjectNode(
                 context.getIdAllocator().getNextId(),
                 copartitionedNodes.joinedNode(),
-                    Assignments.builder()
-                            .putIdentities(copartitionedNodes.joinedNode().getOutputVariables())
-                            .put(joinedRowNumber, rowExpression(rowNumberExpression, context))
-                            .put(joinedPartitionSize, rowExpression(partitionSizeExpression, context))
-                            .putAll(joinedPartitionByAssignments.build())
-                            .build());
+                Assignments.builder()
+                        .putIdentities(copartitionedNodes.joinedNode().getOutputVariables())
+                        .put(joinedRowNumber, castToRowExpression(rowNumberExpression))
+                        .put(joinedPartitionSize, castToRowExpression(partitionSizeExpression))
+                        .putAll(joinedPartitionByAssignments.build())
+                        .build());
         boolean joinedPruneWhenEmpty = copartitionedNodes.leftPruneWhenEmpty() || copartitionedNodes.rightPruneWhenEmpty();
 
         Map<VariableReferenceExpression, VariableReferenceExpression> joinedRowNumberSymbolsMapping = ImmutableMap.<VariableReferenceExpression, VariableReferenceExpression>builder()
@@ -616,7 +598,7 @@ public class ImplementTableFunctionSource
         return new NodeWithVariables(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy.build(), joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
     }
 
-    private JoinedNodes join(NodeWithVariables left, NodeWithVariables right, Context context)
+    private static JoinedNodes join(NodeWithVariables left, NodeWithVariables right, Context context)
     {
         Expression leftRowNumber = toSymbolReference(left.rowNumber());
         Expression leftPartitionSize = toSymbolReference(left.partitionSize());
@@ -668,8 +650,8 @@ public class ImplementTableFunctionSource
                         Stream.concat(left.node().getOutputVariables().stream(),
                                         right.node().getOutputVariables().stream())
                                 .collect(Collectors.toList()),
-                        Optional.of(rowExpression(joinCondition, context)),
-                        //Optional.empty(),
+                        //Optional.of(joinCondition),
+                        Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
@@ -687,7 +669,7 @@ public class ImplementTableFunctionSource
                 right.rowNumberSymbolsMapping());
     }
 
-    private NodeWithVariables appendHelperSymbolsForJoinedNodes(JoinedNodes joinedNodes, Context context)
+    private static NodeWithVariables appendHelperSymbolsForJoinedNodes(JoinedNodes joinedNodes, Context context)
     {
         Expression leftRowNumber = toSymbolReference(joinedNodes.leftRowNumber());
         Expression leftPartitionSize = toSymbolReference(joinedNodes.leftPartitionSize());
@@ -719,8 +701,8 @@ public class ImplementTableFunctionSource
                 joinedNodes.joinedNode(),
                 Assignments.builder()
                         .putIdentities(joinedNodes.joinedNode().getOutputVariables())
-                        .put(joinedRowNumber, rowExpression(rowNumberExpression, context))
-                        .put(joinedPartitionSize, rowExpression(partitionSizeExpression, context))
+                        .put(joinedRowNumber, castToRowExpression(rowNumberExpression))
+                        .put(joinedPartitionSize, castToRowExpression(partitionSizeExpression))
                         .build());
 
         List<VariableReferenceExpression> joinedPartitionBy = ImmutableList.<VariableReferenceExpression>builder()
@@ -738,7 +720,7 @@ public class ImplementTableFunctionSource
         return new NodeWithVariables(project, joinedRowNumber, joinedPartitionSize, joinedPartitionBy, joinedPruneWhenEmpty, joinedRowNumberSymbolsMapping);
     }
 
-    private NodeWithMarkers appendMarkerSymbols(PlanNode node, Set<VariableReferenceExpression> variables, VariableReferenceExpression referenceSymbol, Context context)
+    private static NodeWithMarkers appendMarkerSymbols(PlanNode node, Set<VariableReferenceExpression> variables, VariableReferenceExpression referenceSymbol, Context context)
     {
         Assignments.Builder assignments = Assignments.builder();
         assignments.putIdentities(node.getOutputVariables());
@@ -750,7 +732,7 @@ public class ImplementTableFunctionSource
             variablesToMarkers.put(variable, marker);
             Expression actual = toSymbolReference(variable);
             Expression reference = toSymbolReference(referenceSymbol);
-            assignments.put(marker, rowExpression(new IfExpression(new ComparisonExpression(EQUAL, actual, reference), actual, new Cast(new NullLiteral(), StandardTypes.BIGINT)), context));
+            assignments.put(marker, castToRowExpression(new IfExpression(new ComparisonExpression(EQUAL, actual, reference), actual, new Cast(new NullLiteral(), StandardTypes.BIGINT))));
         }
 
         PlanNode project = new ProjectNode(
@@ -900,15 +882,75 @@ public class ImplementTableFunctionSource
         }
     }
 
-    private RowExpression rowExpression(Expression expression, Context context)
+    private static RowExpression castToRowExpression(Expression expression)
     {
-        return toRowExpression(
-                expression,
-                metadata,
-                context.getSession(),
-                sqlParser,
-                variableAllocator,
-                analysis,
-                sqlContext.getTranslatorContext());
+        return new OriginalExpression(expression);
+    }
+
+    private static class OriginalExpression extends RowExpression
+    {
+        private final Expression expression;
+
+        OriginalExpression(Expression expression)
+        {
+            this.expression = requireNonNull(expression, "expression is null");
+        }
+
+        public Expression getExpression()
+        {
+            return expression;
+        }
+
+        @Override
+        public Type getType()
+        {
+            throw new UnsupportedOperationException("OriginalExpression does not have a type");
+        }
+
+        @Override
+        public List<RowExpression> getChildren()
+        {
+            return expression.getChildren().stream()
+                    .filter( child -> child instanceof Expression)
+                    .map( child -> castToRowExpression((Expression) child))
+                    .collect(toImmutableList());
+        }
+
+        @Override
+        public String toString()
+        {
+            return expression.toString();
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(expression);
+        }
+
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            OriginalExpression other = (OriginalExpression) obj;
+            return Objects.equals(this.expression, other.expression);
+        }
+
+        @Override
+        public <R, C> R accept(RowExpressionVisitor<R, C> visitor, C context)
+        {
+            throw new UnsupportedOperationException("OriginalExpression cannot appear in a RowExpression tree");
+        }
+
+        @Override
+        public RowExpression canonicalize()
+        {
+            return getSourceLocation().isPresent() ? new VariableReferenceExpression(Optional.empty(), toString(), getType()) : this;
+        }
     }
 }
