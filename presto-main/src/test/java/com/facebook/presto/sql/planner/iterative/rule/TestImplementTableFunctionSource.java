@@ -13,28 +13,24 @@
  */
 package com.facebook.presto.sql.planner.iterative.rule;
 
-/*
-import com.facebook.presto.spi.plan.Assignments;
+import com.facebook.presto.spi.plan.Ordering;
 import com.facebook.presto.spi.plan.OrderingScheme;
 import com.facebook.presto.spi.plan.DataOrganizationSpecification;
-import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
-*/
+
+import com.facebook.presto.spi.relation.VariableReferenceExpression;
 import com.facebook.presto.sql.planner.iterative.rule.test.BaseRuleTest;
-/*
-import com.facebook.presto.sql.planner.iterative.rule.test.PlanBuilder;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughColumn;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecification;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.TableArgumentProperties;
-*/
+
+import com.facebook.presto.sql.planner.plan.TableFunctionNode;
 import com.google.common.collect.ImmutableList;
-/*
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-*/
 import org.testng.annotations.Test;
 
-/*
+
 import java.util.Optional;
 
 import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
@@ -42,19 +38,18 @@ import static com.facebook.presto.common.block.SortOrder.DESC_NULLS_FIRST;
 import static com.facebook.presto.common.type.IntegerType.INTEGER;
 import static com.facebook.presto.common.type.TinyintType.TINYINT;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.functionCall;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.specification;
-*/
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableFunctionProcessor;
-/*
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.values;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.window;
 import static com.facebook.presto.spi.plan.JoinType.FULL;
 import static com.facebook.presto.spi.plan.JoinType.INNER;
 import static com.facebook.presto.spi.plan.JoinType.LEFT;
- */
+
 
 public class TestImplementTableFunctionSource
         extends BaseRuleTest
@@ -73,7 +68,7 @@ public class TestImplementTableFunctionSource
                         .name("test_function")
                         .properOutputs(ImmutableList.of("a"))));
     }
-    /*
+
 
     @Test
     public void testSingleSourceWithRowSemantics()
@@ -81,18 +76,18 @@ public class TestImplementTableFunctionSource
         // no pass-through columns
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
                             ImmutableList.of(p.values(c)),
-                            ImmutableList.of(new TableArgumentProperties(
+                            ImmutableList.of(new TableFunctionNode.TableArgumentProperties(
                                     "table_argument",
                                     true,
                                     true,
-                                    new PassThroughSpecification(false, ImmutableList.of()),
+                                    new TableFunctionNode.PassThroughSpecification(false, ImmutableList.of()),
                                     ImmutableList.of(c),
                                     Optional.empty())),
                             ImmutableList.of());
@@ -105,18 +100,18 @@ public class TestImplementTableFunctionSource
         // pass-through columns
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
                             ImmutableList.of(p.values(c)),
-                            ImmutableList.of(new TableArgumentProperties(
+                            ImmutableList.of(new TableFunctionNode.TableArgumentProperties(
                                     "table_argument",
                                     true,
                                     true,
-                                    new PassThroughSpecification(true, ImmutableList.of(new PassThroughColumn(c, false))),
+                                    new TableFunctionNode.PassThroughSpecification(true, ImmutableList.of(new TableFunctionNode.PassThroughColumn(c, false))),
                                     ImmutableList.of(c),
                                     Optional.empty())),
                             ImmutableList.of());
@@ -134,10 +129,10 @@ public class TestImplementTableFunctionSource
         // no pass-through columns, no partition by
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
-                    Symbol d = p.symbol("d");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
+                    VariableReferenceExpression d = p.variable("d");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
@@ -148,7 +143,7 @@ public class TestImplementTableFunctionSource
                                     false,
                                     new PassThroughSpecification(false, ImmutableList.of()),
                                     ImmutableList.of(c, d),
-                                    Optional.of(new DataOrganizationSpecification(ImmutableList.of(), Optional.of(new OrderingScheme(ImmutableList.of(d), ImmutableMap.of(d, ASC_NULLS_LAST))))))),
+                                    Optional.of(new DataOrganizationSpecification(ImmutableList.of(), Optional.of(new OrderingScheme(ImmutableList.of(new Ordering(d, ASC_NULLS_LAST)))))))),
                             ImmutableList.of());
                 })
                 .matches(PlanMatchPattern.tableFunctionProcessor(builder -> builder
@@ -160,10 +155,10 @@ public class TestImplementTableFunctionSource
         // no pass-through columns, partitioning column present
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
-                    Symbol d = p.symbol("d");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
+                    VariableReferenceExpression d = p.variable("d");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
@@ -174,7 +169,7 @@ public class TestImplementTableFunctionSource
                                     false,
                                     new PassThroughSpecification(false, ImmutableList.of(new PassThroughColumn(c, true))),
                                     ImmutableList.of(c, d),
-                                    Optional.of(new DataOrganizationSpecification(ImmutableList.of(c), Optional.of(new OrderingScheme(ImmutableList.of(d), ImmutableMap.of(d, ASC_NULLS_LAST))))))),
+                                    Optional.of(new DataOrganizationSpecification(ImmutableList.of(c), Optional.of(new OrderingScheme(ImmutableList.of(new Ordering(d, ASC_NULLS_LAST)))))))),
                             ImmutableList.of());
                 })
                 .matches(PlanMatchPattern.tableFunctionProcessor(builder -> builder
@@ -187,10 +182,10 @@ public class TestImplementTableFunctionSource
         // pass-through columns
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
-                    Symbol d = p.symbol("d");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
+                    VariableReferenceExpression d = p.variable("d");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
@@ -212,17 +207,18 @@ public class TestImplementTableFunctionSource
                         values("c", "d")));
     }
 
+    /*
     @Test
     public void testTwoSourcesWithSetSemantics()
     {
         tester().assertThat(new ImplementTableFunctionSource(tester().getMetadata()))
                 .on(p -> {
-                    Symbol a = p.symbol("a");
-                    Symbol b = p.symbol("b");
-                    Symbol c = p.symbol("c");
-                    Symbol d = p.symbol("d");
-                    Symbol e = p.symbol("e");
-                    Symbol f = p.symbol("f");
+                    VariableReferenceExpression a = p.variable("a");
+                    VariableReferenceExpression b = p.variable("b");
+                    VariableReferenceExpression c = p.variable("c");
+                    VariableReferenceExpression d = p.variable("d");
+                    VariableReferenceExpression e = p.variable("e");
+                    VariableReferenceExpression f = p.variable("f");
                     return p.tableFunction(
                             "test_function",
                             ImmutableList.of(a, b),
@@ -267,11 +263,11 @@ public class TestImplementTableFunctionSource
                                         join(// join nodes using helper symbols
                                                 FULL,
                                                 joinBuilder -> joinBuilder
-                                                        .filter("""
-                                                                input_1_row_number = input_2_row_number OR
-                                                                input_1_row_number > input_2_partition_size AND input_2_row_number = BIGINT '1' OR
-                                                                input_2_row_number > input_1_partition_size AND input_1_row_number = BIGINT '1'
-                                                                """)
+                                                        .filter(
+                                                                "input_1_row_number = input_2_row_number OR " +
+                                                                " input_1_row_number > input_2_partition_size AND input_2_row_number = BIGINT '1' OR " +
+                                                                " input_2_row_number > input_1_partition_size AND input_1_row_number = BIGINT '1'"
+                                                                )
                                                         .left(window(// append helper symbols for source input_1
                                                                 builder -> builder
                                                                         .specification(specification(ImmutableList.of("c"), ImmutableList.of(), ImmutableMap.of()))
@@ -287,7 +283,7 @@ public class TestImplementTableFunctionSource
                                                                 // input_2
                                                                 values("e", "f"))))))));
     }
-
+/*
     @Test
     public void testThreeSourcesWithSetSemantics()
     {

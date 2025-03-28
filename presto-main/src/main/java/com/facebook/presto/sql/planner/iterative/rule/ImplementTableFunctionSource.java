@@ -13,42 +13,34 @@
  */
 package com.facebook.presto.sql.planner.iterative.rule;
 
-
 import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.matching.Captures;
 import com.facebook.presto.matching.Pattern;
 import com.facebook.presto.metadata.FunctionAndTypeManager;
 import com.facebook.presto.metadata.Metadata;
-import com.facebook.presto.spi.SourceLocation;
 import com.facebook.presto.spi.function.FunctionHandle;
 import com.facebook.presto.spi.function.FunctionMetadata;
-import com.facebook.presto.spi.plan.EquiJoinClause;
-import com.facebook.presto.spi.plan.JoinDistributionType;
 import com.facebook.presto.spi.plan.JoinType;
 import com.facebook.presto.spi.plan.Ordering;
 import com.facebook.presto.spi.plan.OrderingScheme;
 import com.facebook.presto.spi.plan.WindowNode;
 import com.facebook.presto.spi.plan.WindowNode.Frame;
 import com.facebook.presto.spi.relation.CallExpression;
-import com.facebook.presto.spi.relation.ConstantExpression;
 import com.facebook.presto.spi.relation.RowExpression;
 import com.facebook.presto.spi.relation.RowExpressionVisitor;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
-import com.facebook.presto.sql.planner.QueryPlanner;
-import com.facebook.presto.sql.planner.SqlPlannerContext;
-import com.facebook.presto.sql.planner.Symbol;
-import com.facebook.presto.sql.planner.iterative.Rule;
 import com.facebook.presto.spi.plan.Assignments;
 import com.facebook.presto.spi.plan.DataOrganizationSpecification;
 import com.facebook.presto.spi.plan.JoinNode;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.ProjectNode;
+import com.facebook.presto.sql.planner.QueryPlanner;
+import com.facebook.presto.sql.planner.iterative.Rule;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecification;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.TableArgumentProperties;
 import com.facebook.presto.sql.planner.plan.TableFunctionProcessorNode;
-
 import com.facebook.presto.sql.tree.Cast;
 import com.facebook.presto.sql.tree.CoalesceExpression;
 import com.facebook.presto.sql.tree.ComparisonExpression;
@@ -59,15 +51,12 @@ import com.facebook.presto.sql.tree.LogicalBinaryExpression;
 import com.facebook.presto.sql.tree.NotExpression;
 import com.facebook.presto.sql.tree.NullLiteral;
 import com.facebook.presto.sql.tree.QualifiedName;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
-import jdk.nashorn.internal.codegen.FunctionSignature;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -77,18 +66,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-
 import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.plan.JoinType.FULL;
 import static com.facebook.presto.spi.plan.JoinType.INNER;
 import static com.facebook.presto.spi.plan.JoinType.LEFT;
 import static com.facebook.presto.spi.plan.JoinType.RIGHT;
-import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_PRECEDING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_FOLLOWING;
+import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_PRECEDING;
 import static com.facebook.presto.spi.plan.WindowNode.Frame.WindowType.ROWS;
 import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
-import static com.facebook.presto.sql.planner.TranslateExpressionsUtil.toRowExpression;
 import static com.facebook.presto.sql.planner.plan.Patterns.tableFunction;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.EQUAL;
 import static com.facebook.presto.sql.tree.ComparisonExpression.Operator.GREATER_THAN;
@@ -426,7 +413,7 @@ public class ImplementTableFunctionSource
         List<Expression> copartitionConjuncts = Streams.zip(
                         leftPartitionBy.stream(),
                         rightPartitionBy.stream(),
-                        (leftColumn, rightColumn) -> new NotExpression(new ComparisonExpression(IS_DISTINCT_FROM, leftColumn, rightColumn)))
+                (leftColumn, rightColumn) -> new NotExpression(new ComparisonExpression(IS_DISTINCT_FROM, leftColumn, rightColumn)))
                 .collect(toImmutableList());
 
         // Align matching partitions (co-partitions) from left and right source, according to row number.
@@ -655,8 +642,7 @@ public class ImplementTableFunctionSource
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
-                        ImmutableMap.of()
-                        ),
+                        ImmutableMap.of()),
                 left.rowNumber(),
                 left.partitionSize(),
                 left.partitionBy(),
@@ -743,25 +729,29 @@ public class ImplementTableFunctionSource
         return new NodeWithMarkers(project, variablesToMarkers.buildOrThrow());
     }
 
-    private static class SourceWithProperties {
+    private static class SourceWithProperties
+    {
         private final PlanNode source;
         private final TableArgumentProperties properties;
 
-        public SourceWithProperties(PlanNode source, TableArgumentProperties properties) {
+        public SourceWithProperties(PlanNode source, TableArgumentProperties properties)
+        {
             this.source = requireNonNull(source, "source is null");
             this.properties = requireNonNull(properties, "properties is null");
         }
 
-        public PlanNode source() {
+        public PlanNode source()
+        {
             return source;
         }
 
-        public TableArgumentProperties properties() {
+        public TableArgumentProperties properties()
+        {
             return properties;
         }
     }
 
-    public final static class NodeWithVariables
+    public static final class NodeWithVariables
     {
         private final PlanNode node;
         private final VariableReferenceExpression rowNumber;
@@ -813,7 +803,8 @@ public class ImplementTableFunctionSource
         }
     }
 
-    private static class JoinedNodes {
+    private static class JoinedNodes
+    {
         private final PlanNode joinedNode;
         private final VariableReferenceExpression leftRowNumber;
         private final VariableReferenceExpression leftPartitionSize;
@@ -837,7 +828,8 @@ public class ImplementTableFunctionSource
                 VariableReferenceExpression rightPartitionSize,
                 List<VariableReferenceExpression> rightPartitionBy,
                 boolean rightPruneWhenEmpty,
-                Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping) {
+                Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping)
+        {
             this.joinedNode = requireNonNull(joinedNode, "joinedNode is null");
             this.leftRowNumber = requireNonNull(leftRowNumber, "leftRowNumber is null");
             this.leftPartitionSize = requireNonNull(leftPartitionSize, "leftPartitionSize is null");
@@ -851,33 +843,70 @@ public class ImplementTableFunctionSource
             this.rightRowNumberSymbolsMapping = ImmutableMap.copyOf(requireNonNull(rightRowNumberSymbolsMapping, "rightRowNumberSymbolsMapping is null"));
         }
 
-        public PlanNode joinedNode() { return joinedNode; }
-        public VariableReferenceExpression leftRowNumber() { return leftRowNumber; }
-        public VariableReferenceExpression leftPartitionSize() { return leftPartitionSize; }
-        public List<VariableReferenceExpression> leftPartitionBy() { return leftPartitionBy; }
-        public boolean leftPruneWhenEmpty() { return leftPruneWhenEmpty; }
-        public Map<VariableReferenceExpression, VariableReferenceExpression> leftRowNumberSymbolsMapping() { return leftRowNumberSymbolsMapping; }
-        public VariableReferenceExpression rightRowNumber() { return rightRowNumber; }
-        public VariableReferenceExpression rightPartitionSize() { return rightPartitionSize; }
-        public List<VariableReferenceExpression> rightPartitionBy() { return rightPartitionBy; }
-        public boolean rightPruneWhenEmpty() { return rightPruneWhenEmpty; }
-        public Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping() { return rightRowNumberSymbolsMapping; }
+        public PlanNode joinedNode()
+        {
+            return joinedNode;
+        }
+        public VariableReferenceExpression leftRowNumber()
+        {
+            return leftRowNumber;
+        }
+        public VariableReferenceExpression leftPartitionSize()
+        {
+            return leftPartitionSize;
+        }
+        public List<VariableReferenceExpression> leftPartitionBy()
+        {
+            return leftPartitionBy;
+        }
+        public boolean leftPruneWhenEmpty()
+        {
+            return leftPruneWhenEmpty;
+        }
+        public Map<VariableReferenceExpression, VariableReferenceExpression> leftRowNumberSymbolsMapping()
+        {
+            return leftRowNumberSymbolsMapping;
+        }
+        public VariableReferenceExpression rightRowNumber()
+        {
+            return rightRowNumber;
+        }
+        public VariableReferenceExpression rightPartitionSize()
+        {
+            return rightPartitionSize;
+        }
+        public List<VariableReferenceExpression> rightPartitionBy()
+        {
+            return rightPartitionBy;
+        }
+        public boolean rightPruneWhenEmpty()
+        {
+            return rightPruneWhenEmpty;
+        }
+        public Map<VariableReferenceExpression, VariableReferenceExpression> rightRowNumberSymbolsMapping()
+        {
+            return rightRowNumberSymbolsMapping;
+        }
     }
 
-    private static class NodeWithMarkers {
+    private static class NodeWithMarkers
+    {
         private final PlanNode node;
         private final Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker;
 
-        public NodeWithMarkers(PlanNode node, Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker) {
+        public NodeWithMarkers(PlanNode node, Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker)
+        {
             this.node = requireNonNull(node, "node is null");
             this.variableToMarker = ImmutableMap.copyOf(requireNonNull(variableToMarker, "symbolToMarker is null"));
         }
 
-        public PlanNode node() {
+        public PlanNode node()
+        {
             return node;
         }
 
-        public Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker() {
+        public Map<VariableReferenceExpression, VariableReferenceExpression> variableToMarker()
+        {
             return variableToMarker;
         }
     }
@@ -887,7 +916,8 @@ public class ImplementTableFunctionSource
         return new OriginalExpression(expression);
     }
 
-    private static class OriginalExpression extends RowExpression
+    private static class OriginalExpression
+            extends RowExpression
     {
         private final Expression expression;
 
@@ -911,8 +941,8 @@ public class ImplementTableFunctionSource
         public List<RowExpression> getChildren()
         {
             return expression.getChildren().stream()
-                    .filter( child -> child instanceof Expression)
-                    .map( child -> castToRowExpression((Expression) child))
+                    .filter(child -> child instanceof Expression)
+                    .map(child -> castToRowExpression((Expression) child))
                     .collect(toImmutableList());
         }
 

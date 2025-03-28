@@ -980,7 +980,7 @@ public class PlanBuilder
                 sources,
                 tableArgumentProperties,
                 copartitioningLists,
-                new TableFunctionHandle(new ConnectorId("connector_id"),  new SchemaFunctionName("system", name), new ConnectorTableFunctionHandle() {}, TestingTransactionHandle.create()));
+                new TableFunctionHandle(new ConnectorId("connector_id"), new SchemaFunctionName("system", name), new ConnectorTableFunctionHandle() {}, TestingTransactionHandle.create()));
     }
 
     public RowNumberNode rowNumber(List<VariableReferenceExpression> partitionBy, Optional<Integer> maxRowCountPerPartition, VariableReferenceExpression rowNumberVariable, PlanNode source)
