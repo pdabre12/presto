@@ -31,7 +31,6 @@ import com.google.common.collect.ImmutableSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -39,6 +38,7 @@ import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
+import static com.facebook.presto.sql.planner.assertions.SpecificationProvider.matchSpecification;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -118,10 +118,11 @@ public class TableFunctionProcessorMatcher
         if (specification.isPresent() != tableFunctionProcessorNode.getSpecification().isPresent()) {
             return NO_MATCH;
         }
-        if (specification.isPresent()) {
-            if (!specification.get().getExpectedValue(symbolAliases).equals(tableFunctionProcessorNode.getSpecification().orElseThrow(NoSuchElementException::new))) {
-                return NO_MATCH;
-            }
+
+        if (!specification
+                .map(expectedSpecification -> matchSpecification(tableFunctionProcessorNode.getSpecification().get(), expectedSpecification.getExpectedValue(symbolAliases)))
+                .orElse(true)) {
+            return NO_MATCH;
         }
 
         ImmutableMap.Builder<String, SymbolReference> properOutputsMapping = ImmutableMap.builder();

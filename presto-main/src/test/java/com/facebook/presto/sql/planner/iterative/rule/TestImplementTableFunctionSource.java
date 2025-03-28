@@ -20,7 +20,6 @@ import com.facebook.presto.spi.relation.VariableReferenceExpression;
 import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
 import com.facebook.presto.sql.planner.iterative.rule.test.BaseRuleTest;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode;
-import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughColumn;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughSpecification;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode.TableArgumentProperties;
 import com.google.common.collect.ImmutableList;
@@ -34,6 +33,7 @@ import static com.facebook.presto.common.block.SortOrder.ASC_NULLS_LAST;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.specification;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableFunctionProcessor;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.values;
+import static com.facebook.presto.sql.planner.plan.TableFunctionNode.PassThroughColumn;
 
 public class TestImplementTableFunctionSource
         extends BaseRuleTest
@@ -150,7 +150,7 @@ public class TestImplementTableFunctionSource
                                     "table_argument",
                                     false,
                                     false,
-                                    new PassThroughSpecification(false, ImmutableList.of(new PassThroughColumn(c, true))),
+                                    new PassThroughSpecification(false, ImmutableList.of(new TableFunctionNode.PassThroughColumn(c, true))),
                                     ImmutableList.of(c, d),
                                     Optional.of(new DataOrganizationSpecification(ImmutableList.of(c), Optional.of(new OrderingScheme(ImmutableList.of(new Ordering(d, ASC_NULLS_LAST)))))))),
                             ImmutableList.of());

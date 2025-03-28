@@ -36,6 +36,7 @@ import com.facebook.presto.spi.relation.ConstantExpression;
 import com.facebook.presto.spi.relation.RowExpression;
 import com.facebook.presto.spi.relation.SpecialFormExpression;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
+import com.facebook.presto.sql.analyzer.SemanticException;
 import com.facebook.presto.sql.planner.QueryPlanner;
 import com.facebook.presto.sql.planner.iterative.Rule;
 import com.facebook.presto.sql.planner.plan.TableFunctionNode;
@@ -74,6 +75,7 @@ import static com.facebook.presto.spi.plan.WindowNode.Frame.BoundType.UNBOUNDED_
 import static com.facebook.presto.spi.plan.WindowNode.Frame.WindowType.ROWS;
 import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.COALESCE;
 import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.IF;
+import static com.facebook.presto.sql.analyzer.SemanticErrorCode.INVALID_ARGUMENTS;
 import static com.facebook.presto.sql.analyzer.TypeSignatureProvider.fromTypes;
 import static com.facebook.presto.sql.planner.QueryPlanner.toSymbolReference;
 import static com.facebook.presto.sql.planner.plan.Patterns.tableFunction;
@@ -231,6 +233,9 @@ public class ImplementTableFunctionSource
         FunctionMetadata countFunctionMetadata = functionAndTypeManager.getFunctionMetadata(countFunctionHandle);
         CallExpression countFunction = new CallExpression("count", countFunctionHandle, functionAndTypeManager.getType(countFunctionMetadata.getReturnType()), ImmutableList.of());
 
+        if (!node.getCopartitioningLists().isEmpty()) {
+            throw new SemanticException(INVALID_ARGUMENTS, "Table function co-partitioning not currently supported");
+        }
         // handle co-partitioned sources
         for (List<String> copartitioningList : node.getCopartitioningLists()) {
             List<SourceWithProperties> sourceList = copartitioningList.stream()
