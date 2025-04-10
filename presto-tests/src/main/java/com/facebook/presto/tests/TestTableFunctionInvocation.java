@@ -206,7 +206,6 @@ public class TestTableFunctionInvocation
         // the passed-through column row_number preserves its hidden property.
         assertQuery("SELECT row_number, * FROM TABLE(system.identity_pass_through_function(input => TABLE(tpch.tiny.orders)))",
                 "SELECT row_number, * FROM tpch.tiny.orders");
-
     }
 
     @Test
@@ -218,7 +217,6 @@ public class TestTableFunctionInvocation
 
         assertQuery("SELECT * FROM TABLE(system.repeat(TABLE(VALUES ('a', true), ('b', false)), 4))",
                 "VALUES ('a', true), ('b', false), ('a', true), ('b', false), ('a', true), ('b', false), ('a', true), ('b', false)");
-
 
         assertQuery("SELECT *FROM TABLE(system.repeat(TABLE(VALUES ('a', true), ('b', false)) t(x, y) PARTITION BY x,4))",
                 "VALUES ('a', true), ('b', false), ('a', true), ('b', false), ('a', true), ('b', false), ('a', true), ('b', false)");
