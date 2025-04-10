@@ -230,11 +230,14 @@ import com.facebook.presto.spi.function.FunctionNamespaceManager;
 import com.facebook.presto.spi.function.FunctionNamespaceTransactionHandle;
 import com.facebook.presto.spi.function.Parameter;
 import com.facebook.presto.spi.function.ScalarFunctionImplementation;
+import com.facebook.presto.spi.function.SchemaFunctionName;
 import com.facebook.presto.spi.function.Signature;
 import com.facebook.presto.spi.function.SqlFunction;
 import com.facebook.presto.spi.function.SqlFunctionVisibility;
 import com.facebook.presto.spi.function.SqlInvokedFunction;
 import com.facebook.presto.spi.function.SqlInvokedScalarFunctionImplementation;
+import com.facebook.presto.spi.function.table.TableFunctionMetadata;
+import com.facebook.presto.spi.tvf.TVFProvider;
 import com.facebook.presto.sql.analyzer.FunctionsConfig;
 import com.facebook.presto.type.BigintOperators;
 import com.facebook.presto.type.BooleanOperators;
@@ -531,7 +534,7 @@ import static java.util.concurrent.TimeUnit.HOURS;
 
 @ThreadSafe
 public class BuiltInTypeAndFunctionNamespaceManager
-        implements FunctionNamespaceManager<SqlFunction>
+        implements FunctionNamespaceManager<SqlFunction>, TVFProvider
 {
     public static final CatalogSchemaName JAVA_BUILTIN_NAMESPACE = new CatalogSchemaName("presto", "default");
     public static final String ID = "builtin";
@@ -1367,6 +1370,12 @@ public class BuiltInTypeAndFunctionNamespaceManager
                     1);
         }
         throw new PrestoException(FUNCTION_IMPLEMENTATION_MISSING, format("%s not found", signature));
+    }
+
+    @Override
+    public TableFunctionMetadata resolveTableFunction(SchemaFunctionName schemaFunctionName)
+    {
+        return null;
     }
 
     private static class EmptyTransactionHandle

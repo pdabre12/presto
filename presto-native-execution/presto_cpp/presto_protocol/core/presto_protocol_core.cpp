@@ -98,6 +98,177 @@ std::string json_map_key(const VariableReferenceExpression& p) {
 } // namespace facebook::presto::protocol
 
 namespace facebook::presto::protocol {
+void to_json(json& j, const std::shared_ptr<ArgumentSpecification>& p) {
+  if (p == nullptr) {
+    return;
+  }
+  String type = p->_type;
+
+  if (type == "descriptor") {
+    j = *std::static_pointer_cast<DescriptorArgumentSpecification>(p);
+    return;
+  }
+  if (type == "scalar") {
+    j = *std::static_pointer_cast<NativeScalarArgumentSpecification>(p);
+    return;
+  }
+  if (type == "table") {
+    j = *std::static_pointer_cast<TableArgumentSpecification>(p);
+    return;
+  }
+
+  throw TypeError(type + " no abstract type ArgumentSpecification ");
+}
+
+void from_json(const json& j, std::shared_ptr<ArgumentSpecification>& p) {
+  String type;
+  try {
+    type = p->getSubclassKey(j);
+  } catch (json::parse_error& e) {
+    throw ParseError(
+        std::string(e.what()) +
+        " ArgumentSpecification  ArgumentSpecification");
+  }
+
+  if (type == "descriptor") {
+    std::shared_ptr<DescriptorArgumentSpecification> k =
+        std::make_shared<DescriptorArgumentSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ArgumentSpecification>(k);
+    return;
+  }
+  if (type == "scalar") {
+    std::shared_ptr<NativeScalarArgumentSpecification> k =
+        std::make_shared<NativeScalarArgumentSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ArgumentSpecification>(k);
+    return;
+  }
+  if (type == "table") {
+    std::shared_ptr<TableArgumentSpecification> k =
+        std::make_shared<TableArgumentSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ArgumentSpecification>(k);
+    return;
+  }
+
+  throw TypeError(type + " no abstract type ArgumentSpecification ");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+void to_json(json& j, const std::shared_ptr<ReturnTypeSpecification>& p) {
+  if (p == nullptr) {
+    return;
+  }
+  String type = p->_type;
+
+  if (type == "described_table") {
+    j = *std::static_pointer_cast<DescribedTableReturnTypeSpecification>(p);
+    return;
+  }
+  if (type == "generic_table") {
+    j = *std::static_pointer_cast<GenericTableReturnTypeSpecification>(p);
+    return;
+  }
+  if (type == "only_pass_through_table") {
+    j = *std::static_pointer_cast<OnlyPassThroughReturnTypeSpecification>(p);
+    return;
+  }
+
+  throw TypeError(type + " no abstract type ReturnTypeSpecification ");
+}
+
+void from_json(const json& j, std::shared_ptr<ReturnTypeSpecification>& p) {
+  String type;
+  try {
+    type = p->getSubclassKey(j);
+  } catch (json::parse_error& e) {
+    throw ParseError(
+        std::string(e.what()) +
+        " ReturnTypeSpecification  ReturnTypeSpecification");
+  }
+
+  if (type == "described_table") {
+    std::shared_ptr<DescribedTableReturnTypeSpecification> k =
+        std::make_shared<DescribedTableReturnTypeSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ReturnTypeSpecification>(k);
+    return;
+  }
+  if (type == "generic_table") {
+    std::shared_ptr<GenericTableReturnTypeSpecification> k =
+        std::make_shared<GenericTableReturnTypeSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ReturnTypeSpecification>(k);
+    return;
+  }
+  if (type == "only_pass_through_table") {
+    std::shared_ptr<OnlyPassThroughReturnTypeSpecification> k =
+        std::make_shared<OnlyPassThroughReturnTypeSpecification>();
+    j.get_to(*k);
+    p = std::static_pointer_cast<ReturnTypeSpecification>(k);
+    return;
+  }
+
+  throw TypeError(type + " no abstract type ReturnTypeSpecification ");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+
+void to_json(json& j, const AbstractConnectorTableFunction& p) {
+  j = json::object();
+  to_json_key(
+      j,
+      "schema",
+      p.schema,
+      "AbstractConnectorTableFunction",
+      "String",
+      "schema");
+  to_json_key(
+      j, "name", p.name, "AbstractConnectorTableFunction", "String", "name");
+  to_json_key(
+      j,
+      "arguments",
+      p.arguments,
+      "AbstractConnectorTableFunction",
+      "List<ArgumentSpecification>",
+      "arguments");
+  to_json_key(
+      j,
+      "returnTypeSpecification",
+      p.returnTypeSpecification,
+      "AbstractConnectorTableFunction",
+      "ReturnTypeSpecification",
+      "returnTypeSpecification");
+}
+
+void from_json(const json& j, AbstractConnectorTableFunction& p) {
+  from_json_key(
+      j,
+      "schema",
+      p.schema,
+      "AbstractConnectorTableFunction",
+      "String",
+      "schema");
+  from_json_key(
+      j, "name", p.name, "AbstractConnectorTableFunction", "String", "name");
+  from_json_key(
+      j,
+      "arguments",
+      p.arguments,
+      "AbstractConnectorTableFunction",
+      "List<ArgumentSpecification>",
+      "arguments");
+  from_json_key(
+      j,
+      "returnTypeSpecification",
+      p.returnTypeSpecification,
+      "AbstractConnectorTableFunction",
+      "ReturnTypeSpecification",
+      "returnTypeSpecification");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 void to_json(json& j, const std::shared_ptr<FunctionHandle>& p) {
   if (p == nullptr) {
     return;
@@ -3193,7 +3364,8 @@ DeleteHandle::DeleteHandle() noexcept {
 void to_json(json& j, const DeleteHandle& p) {
   j = json::object();
   j["@type"] = "DeleteHandle";
-  to_json_key(j, "handle", p.handle, "DeleteHandle", "TableHandle", "handle");
+  to_json_key(
+      j, "handle", p.handle, "DeleteHandle", "DeleteTableHandle", "handle");
   to_json_key(
       j,
       "schemaTableName",
@@ -3205,7 +3377,8 @@ void to_json(json& j, const DeleteHandle& p) {
 
 void from_json(const json& j, DeleteHandle& p) {
   p._type = j["@type"];
-  from_json_key(j, "handle", p.handle, "DeleteHandle", "TableHandle", "handle");
+  from_json_key(
+      j, "handle", p.handle, "DeleteHandle", "DeleteTableHandle", "handle");
   from_json_key(
       j,
       "schemaTableName",
@@ -3213,6 +3386,105 @@ void from_json(const json& j, DeleteHandle& p) {
       "DeleteHandle",
       "SchemaTableName",
       "schemaTableName");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+
+void to_json(json& j, const Field& p) {
+  j = json::object();
+  to_json_key(j, "name", p.name, "Field", "String", "name");
+  to_json_key(j, "type", p.type, "Field", "Type", "type");
+}
+
+void from_json(const json& j, Field& p) {
+  from_json_key(j, "name", p.name, "Field", "String", "name");
+  from_json_key(j, "type", p.type, "Field", "Type", "type");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+
+void to_json(json& j, const Descriptor& p) {
+  j = json::object();
+  to_json_key(j, "fields", p.fields, "Descriptor", "List<Field>", "fields");
+}
+
+void from_json(const json& j, Descriptor& p) {
+  from_json_key(j, "fields", p.fields, "Descriptor", "List<Field>", "fields");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+DescribedTableReturnTypeSpecification::
+    DescribedTableReturnTypeSpecification() noexcept {
+  _type = "described_table";
+}
+
+void to_json(json& j, const DescribedTableReturnTypeSpecification& p) {
+  j = json::object();
+  j["@type"] = "described_table";
+  to_json_key(
+      j,
+      "descriptor",
+      p.descriptor,
+      "DescribedTableReturnTypeSpecification",
+      "Descriptor",
+      "descriptor");
+}
+
+void from_json(const json& j, DescribedTableReturnTypeSpecification& p) {
+  p._type = j["@type"];
+  from_json_key(
+      j,
+      "descriptor",
+      p.descriptor,
+      "DescribedTableReturnTypeSpecification",
+      "Descriptor",
+      "descriptor");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+DescriptorArgumentSpecification::DescriptorArgumentSpecification() noexcept {
+  _type = "descriptor";
+}
+
+void to_json(json& j, const DescriptorArgumentSpecification& p) {
+  j = json::object();
+  j["@type"] = "descriptor";
+  to_json_key(
+      j, "name", p.name, "DescriptorArgumentSpecification", "String", "name");
+  to_json_key(
+      j,
+      "required",
+      p.required,
+      "DescriptorArgumentSpecification",
+      "bool",
+      "required");
+  to_json_key(
+      j,
+      "defaultValue",
+      p.defaultValue,
+      "DescriptorArgumentSpecification",
+      "Descriptor",
+      "defaultValue");
+}
+
+void from_json(const json& j, DescriptorArgumentSpecification& p) {
+  p._type = j["@type"];
+  from_json_key(
+      j, "name", p.name, "DescriptorArgumentSpecification", "String", "name");
+  from_json_key(
+      j,
+      "required",
+      p.required,
+      "DescriptorArgumentSpecification",
+      "bool",
+      "required");
+  from_json_key(
+      j,
+      "defaultValue",
+      p.defaultValue,
+      "DescriptorArgumentSpecification",
+      "Descriptor",
+      "defaultValue");
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
@@ -6573,6 +6845,43 @@ void from_json(const json& j, MetadataUpdates& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
+NativeScalarArgumentSpecification::
+    NativeScalarArgumentSpecification() noexcept {
+  _type = "scalar";
+}
+
+void to_json(json& j, const NativeScalarArgumentSpecification& p) {
+  j = json::object();
+  j["@type"] = "scalar";
+  to_json_key(
+      j, "name", p.name, "NativeScalarArgumentSpecification", "String", "name");
+  to_json_key(
+      j, "type", p.type, "NativeScalarArgumentSpecification", "Type", "type");
+  to_json_key(
+      j,
+      "required",
+      p.required,
+      "NativeScalarArgumentSpecification",
+      "bool",
+      "required");
+}
+
+void from_json(const json& j, NativeScalarArgumentSpecification& p) {
+  p._type = j["@type"];
+  from_json_key(
+      j, "name", p.name, "NativeScalarArgumentSpecification", "String", "name");
+  from_json_key(
+      j, "type", p.type, "NativeScalarArgumentSpecification", "Type", "type");
+  from_json_key(
+      j,
+      "required",
+      p.required,
+      "NativeScalarArgumentSpecification",
+      "bool",
+      "required");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 
 void to_json(json& j, const NodeVersion& p) {
   j = json::object();
@@ -8934,43 +9243,6 @@ void from_json(const json& j, SpecialFormExpression& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-
-void to_json(json& j, const Specification& p) {
-  j = json::object();
-  to_json_key(
-      j,
-      "partitionBy",
-      p.partitionBy,
-      "Specification",
-      "List<VariableReferenceExpression>",
-      "partitionBy");
-  to_json_key(
-      j,
-      "orderingScheme",
-      p.orderingScheme,
-      "Specification",
-      "OrderingScheme",
-      "orderingScheme");
-}
-
-void from_json(const json& j, Specification& p) {
-  from_json_key(
-      j,
-      "partitionBy",
-      p.partitionBy,
-      "Specification",
-      "List<VariableReferenceExpression>",
-      "partitionBy");
-  from_json_key(
-      j,
-      "orderingScheme",
-      p.orderingScheme,
-      "Specification",
-      "OrderingScheme",
-      "orderingScheme");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
 SqlFunctionHandle::SqlFunctionHandle() noexcept {
   _type = "json_file";
 }
@@ -9480,6 +9752,66 @@ void from_json(const json& j, SystemTransactionHandle& p) {
       "SystemTransactionHandle",
       "ConnectorTransactionHandle",
       "connectorTransactionHandle");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+TableArgumentSpecification::TableArgumentSpecification() noexcept {
+  _type = "table";
+}
+
+void to_json(json& j, const TableArgumentSpecification& p) {
+  j = json::object();
+  j["@type"] = "table";
+  to_json_key(
+      j, "name", p.name, "TableArgumentSpecification", "String", "name");
+  to_json_key(
+      j,
+      "rowSemantics",
+      p.rowSemantics,
+      "TableArgumentSpecification",
+      "bool",
+      "rowSemantics");
+  to_json_key(
+      j,
+      "pruneWhenEmpty",
+      p.pruneWhenEmpty,
+      "TableArgumentSpecification",
+      "bool",
+      "pruneWhenEmpty");
+  to_json_key(
+      j,
+      "passThroughColumns",
+      p.passThroughColumns,
+      "TableArgumentSpecification",
+      "bool",
+      "passThroughColumns");
+}
+
+void from_json(const json& j, TableArgumentSpecification& p) {
+  p._type = j["@type"];
+  from_json_key(
+      j, "name", p.name, "TableArgumentSpecification", "String", "name");
+  from_json_key(
+      j,
+      "rowSemantics",
+      p.rowSemantics,
+      "TableArgumentSpecification",
+      "bool",
+      "rowSemantics");
+  from_json_key(
+      j,
+      "pruneWhenEmpty",
+      p.pruneWhenEmpty,
+      "TableArgumentSpecification",
+      "bool",
+      "pruneWhenEmpty");
+  from_json_key(
+      j,
+      "passThroughColumns",
+      p.passThroughColumns,
+      "TableArgumentSpecification",
+      "bool",
+      "passThroughColumns");
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
@@ -10728,7 +11060,7 @@ void to_json(json& j, const TopNRowNumberNode& p) {
       "specification",
       p.specification,
       "TopNRowNumberNode",
-      "Specification",
+      "DataOrganizationSpecification",
       "specification");
   to_json_key(
       j,
@@ -10764,7 +11096,7 @@ void from_json(const json& j, TopNRowNumberNode& p) {
       "specification",
       p.specification,
       "TopNRowNumberNode",
-      "Specification",
+      "DataOrganizationSpecification",
       "specification");
   from_json_key(
       j,
@@ -10960,7 +11292,7 @@ void to_json(json& j, const WindowNode& p) {
       "specification",
       p.specification,
       "WindowNode",
-      "Specification",
+      "DataOrganizationSpecification",
       "specification");
   to_json_key(
       j,
@@ -11008,7 +11340,7 @@ void from_json(const json& j, WindowNode& p) {
       "specification",
       p.specification,
       "WindowNode",
-      "Specification",
+      "DataOrganizationSpecification",
       "specification");
   from_json_key(
       j,
