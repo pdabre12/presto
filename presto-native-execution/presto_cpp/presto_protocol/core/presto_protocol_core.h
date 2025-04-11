@@ -67,21 +67,21 @@ extern const char* const PRESTO_ABORT_TASK_URL_PARAM;
 class Exception : public std::runtime_error {
  public:
   explicit Exception(const std::string& message)
-      : std::runtime_error(message) {};
+      : std::runtime_error(message){};
 };
 
 class TypeError : public Exception {
  public:
-  explicit TypeError(const std::string& message) : Exception(message) {};
+  explicit TypeError(const std::string& message) : Exception(message){};
 };
 
 class OutOfRange : public Exception {
  public:
-  explicit OutOfRange(const std::string& message) : Exception(message) {};
+  explicit OutOfRange(const std::string& message) : Exception(message){};
 };
 class ParseError : public Exception {
  public:
-  explicit ParseError(const std::string& message) : Exception(message) {};
+  explicit ParseError(const std::string& message) : Exception(message){};
 };
 
 using String = std::string;
@@ -264,6 +264,16 @@ struct adl_serializer<facebook::presto::protocol::Map<K, V>> {
 // Forward declaration of all abstract types
 //
 namespace facebook::presto::protocol {
+struct ArgumentSpecification : public JsonEncodedSubclass {};
+void to_json(json& j, const std::shared_ptr<ArgumentSpecification>& p);
+void from_json(const json& j, std::shared_ptr<ArgumentSpecification>& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+struct ReturnTypeSpecification : public JsonEncodedSubclass {};
+void to_json(json& j, const std::shared_ptr<ReturnTypeSpecification>& p);
+void from_json(const json& j, std::shared_ptr<ReturnTypeSpecification>& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 struct FunctionHandle : public JsonEncodedSubclass {};
 void to_json(json& j, const std::shared_ptr<FunctionHandle>& p);
 void from_json(const json& j, std::shared_ptr<FunctionHandle>& p);
@@ -354,6 +364,16 @@ void to_json(json& j, const std::shared_ptr<ColumnHandle>& p);
 void from_json(const json& j, std::shared_ptr<ColumnHandle>& p);
 } // namespace facebook::presto::protocol
 
+namespace facebook::presto::protocol {
+struct AbstractConnectorTableFunction {
+  String schema = {};
+  String name = {};
+  List<ArgumentSpecification> arguments = {};
+  std::shared_ptr<ReturnTypeSpecification> returnTypeSpecification = {};
+};
+void to_json(json& j, const AbstractConnectorTableFunction& p);
+void from_json(const json& j, AbstractConnectorTableFunction& p);
+} // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
 struct SourceLocation {
   int line = {};
@@ -1063,6 +1083,41 @@ void to_json(json& j, const DeleteNode& p);
 void from_json(const json& j, DeleteNode& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
+struct Field {
+  String name = {};
+  std::shared_ptr<Type> type = {};
+};
+void to_json(json& j, const Field& p);
+void from_json(const json& j, Field& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+struct Descriptor {
+  List<Field> fields = {};
+};
+void to_json(json& j, const Descriptor& p);
+void from_json(const json& j, Descriptor& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+struct DescribedTableReturnTypeSpecification : public ReturnTypeSpecification {
+  Descriptor descriptor = {};
+
+  DescribedTableReturnTypeSpecification() noexcept;
+};
+void to_json(json& j, const DescribedTableReturnTypeSpecification& p);
+void from_json(const json& j, DescribedTableReturnTypeSpecification& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+struct DescriptorArgumentSpecification : public ArgumentSpecification {
+  String name = {};
+  bool required = {};
+  Descriptor defaultValue = {};
+
+  DescriptorArgumentSpecification() noexcept;
+};
+void to_json(json& j, const DescriptorArgumentSpecification& p);
+void from_json(const json& j, DescriptorArgumentSpecification& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 struct DistinctLimitNode : public PlanNode {
   std::shared_ptr<PlanNode> source = {};
   int64_t limit = {};
@@ -1686,6 +1741,17 @@ void to_json(json& j, const MetadataUpdates& p);
 void from_json(const json& j, MetadataUpdates& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
+struct NativeScalarArgumentSpecification : public ArgumentSpecification {
+  String name = {};
+  Type type = {};
+  bool required = {};
+
+  NativeScalarArgumentSpecification() noexcept;
+};
+void to_json(json& j, const NativeScalarArgumentSpecification& p);
+void from_json(const json& j, NativeScalarArgumentSpecification& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 struct NodeVersion {
   String version = {};
 };
@@ -2120,14 +2186,6 @@ void to_json(json& j, const SpecialFormExpression& p);
 void from_json(const json& j, SpecialFormExpression& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct Specification {
-  List<VariableReferenceExpression> partitionBy = {};
-  std::shared_ptr<OrderingScheme> orderingScheme = {};
-};
-void to_json(json& j, const Specification& p);
-void from_json(const json& j, Specification& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
 struct SqlFunctionHandle : public FunctionHandle {
   SqlFunctionId functionId = {};
   String version = {};
@@ -2384,6 +2442,18 @@ void to_json(json& j, const SystemTransactionHandle& p);
 void from_json(const json& j, SystemTransactionHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
+struct TableArgumentSpecification : public ArgumentSpecification {
+  String name = {};
+  bool rowSemantics = {};
+  bool pruneWhenEmpty = {};
+  bool passThroughColumns = {};
+
+  TableArgumentSpecification() noexcept;
+};
+void to_json(json& j, const TableArgumentSpecification& p);
+void from_json(const json& j, TableArgumentSpecification& p);
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
 struct TableScanNode : public PlanNode {
   TableHandle table = {};
   List<VariableReferenceExpression> outputVariables = {};
@@ -2555,7 +2625,7 @@ void from_json(const json& j, TopNNode& p);
 namespace facebook::presto::protocol {
 struct TopNRowNumberNode : public PlanNode {
   std::shared_ptr<PlanNode> source = {};
-  Specification specification = {};
+  DataOrganizationSpecification specification = {};
   VariableReferenceExpression rowNumberVariable = {};
   int maxRowCountPerPartition = {};
   bool partial = {};
@@ -2605,7 +2675,7 @@ struct WindowNode : public PlanNode {
   std::shared_ptr<SourceLocation> sourceLocation = {};
 
   std::shared_ptr<PlanNode> source = {};
-  Specification specification = {};
+  DataOrganizationSpecification specification = {};
   Map<VariableReferenceExpression, Function> windowFunctions = {};
   std::shared_ptr<VariableReferenceExpression> hashVariable = {};
   List<VariableReferenceExpression> prePartitionedInputs = {};
