@@ -27,6 +27,7 @@ public class HiveExternalWorkerQueryRunner
     {
         // You need to add "--user user" to your CLI for your queries to work.
         Logging.initialize();
+        // test
 
         // Create tables before launching distributed runner.
         QueryRunner javaQueryRunner = PrestoNativeQueryRunnerUtils.javaHiveQueryRunnerBuilder().build();
