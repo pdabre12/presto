@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
+import static com.facebook.airlift.testing.Closeables.closeAllRuntimeException;
 import static com.facebook.presto.router.scheduler.SchedulerType.CUSTOM_PLUGIN_SCHEDULER;
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
@@ -65,6 +66,7 @@ public class TestPlanCheckerRouterPlugin
     private URI httpServerUri;
     private String storageFormat;
     private boolean sidecarEnabled;
+    private QueryRunner nativeQueryRunner;
     // mock object only to check the redirect requests counters.
     private PlanCheckerRouterPluginPrestoClient planCheckerRouterPluginPrestoClient;
 
@@ -76,6 +78,8 @@ public class TestPlanCheckerRouterPlugin
         sidecarEnabled = parseBoolean(System.getProperty("sidecarEnabled", "true"));
         super.init();
         Logging.initialize();
+
+        nativeQueryRunner = getQueryRunner();
 
         // for testing purposes, we can skip the router chaining part and specify the native/java clusters directly here
         URI nativeClusterURI = ((DistributedQueryRunner) getQueryRunner()).getCoordinator().getBaseUrl();
@@ -89,7 +93,8 @@ public class TestPlanCheckerRouterPlugin
                 planCheckerRouterConfig.getPlanCheckClustersURIs().get(0),
                 planCheckerRouterConfig.getJavaRouterURI(),
                 planCheckerRouterConfig.getNativeRouterURI(),
-                planCheckerRouterConfig.getClientRequestTimeout());
+                planCheckerRouterConfig.getClientRequestTimeout(),
+                planCheckerRouterConfig.isJavaClusterFallbackEnabled());
 
         Path tempFile = Files.createTempFile("temp-config", ".json");
         File configFile = getConfigFile(singletonList(planCheckerRouterConfig.getNativeRouterURI()), tempFile.toFile());
@@ -180,6 +185,22 @@ public class TestPlanCheckerRouterPlugin
                 {"select * from nation", "line 1:15: Schema must be specified when session schema is not set"}};
     }
 
+    @Test(dependsOnMethods =
+            {"testFailingQueriesOnBothClusters",
+                    "testNativeCompatibleQueries",
+                    "testNativeIncompatibleQueries"})
+    public void testPlanCheckerClusterNotAvailable()
+            throws SQLException
+    {
+        if (sidecarEnabled) {
+            closeAllRuntimeException(nativeQueryRunner);
+            nativeQueryRunner = null;
+            for (String query : getNativeIncompatibleQueries()) {
+                runQuery(query, httpServerUri);
+            }
+        }
+    }
+
     private static List<String> getNativeCompatibleQueries()
     {
         String catalog = "hive";
@@ -218,7 +239,8 @@ public class TestPlanCheckerRouterPlugin
         String planCheckerClusterURIs = format("plan-check-clusters-uris=%s", planCheckerRouterConfig.getPlanCheckClustersURIs().get(0));
         String javaClusterURI = format("router-java-url=%s", planCheckerRouterConfig.getJavaRouterURI());
         String nativeClusterURI = format("router-native-url=%s", planCheckerRouterConfig.getNativeRouterURI());
-        Files.write(tempPluginSchedulerConfigFile, ImmutableList.of(schedulerName, planCheckerClusterURIs, javaClusterURI, nativeClusterURI));
+        String javaClusterFallbackEnabled = format("enable-java-cluster-fallback=%s", planCheckerRouterConfig.isJavaClusterFallbackEnabled());
+        Files.write(tempPluginSchedulerConfigFile, ImmutableList.of(schedulerName, planCheckerClusterURIs, javaClusterURI, nativeClusterURI, javaClusterFallbackEnabled));
         return tempPluginSchedulerConfigFile.toFile();
     }
 
