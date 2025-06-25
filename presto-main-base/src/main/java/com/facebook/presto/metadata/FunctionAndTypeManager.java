@@ -78,6 +78,7 @@ import javax.inject.Inject;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -128,6 +129,7 @@ public class FunctionAndTypeManager
         implements FunctionMetadataManager, TypeManager
 {
     private static final Pattern DEFAULT_NAMESPACE_PREFIX_PATTERN = Pattern.compile("[a-z]+\\.[a-z]+");
+    private static final Set<String> NATIVE_WHITE_LISTED_FUNCTIONS = new HashSet<>(Arrays.asList("now", "current_time", "current_timestamp", "current_timezone", "localtime", "localtimestamp"));
     private final TransactionManager transactionManager;
     private final BlockEncodingSerde blockEncodingSerde;
     private final BuiltInTypeAndFunctionNamespaceManager builtInTypeAndFunctionNamespaceManager;
@@ -480,7 +482,8 @@ public class FunctionAndTypeManager
 
         Optional<FunctionNamespaceTransactionHandle> transactionHandle = session.getTransactionId().map(
                 id -> transactionManager.getFunctionNamespaceTransaction(id, functionName.getCatalogName()));
-        return functionNamespaceManager.get().getFunctions(transactionHandle, functionName);
+
+        return getCandidates(functionName, transactionHandle, functionNamespaceManager.get());
     }
 
     public void createFunction(SqlInvokedFunction function, boolean replace)
@@ -697,7 +700,8 @@ public class FunctionAndTypeManager
             return lookupCachedFunction(functionName, parameterTypes);
         }
 
-        Collection<? extends SqlFunction> candidates = functionNamespaceManager.get().getFunctions(Optional.empty(), functionName);
+        Collection<? extends SqlFunction> candidates = getCandidates(functionName, Optional.empty(), functionNamespaceManager.get());
+
         Optional<Signature> match = functionSignatureMatcher.match(candidates, parameterTypes, false);
         if (!match.isPresent()) {
             throw new PrestoException(FUNCTION_NOT_FOUND, constructFunctionNotFoundErrorMessage(functionName, parameterTypes, candidates));
@@ -773,10 +777,13 @@ public class FunctionAndTypeManager
             return functionNamespaceManager.resolveFunction(transactionHandle, functionName, parameterTypes.stream().map(TypeSignatureProvider::getTypeSignature).collect(toImmutableList()));
         }
 
-        Collection<? extends SqlFunction> candidates = functionNamespaceManager.getFunctions(transactionHandle, functionName);
+        Collection<? extends SqlFunction> candidates = getCandidates(functionName, transactionHandle, functionNamespaceManager);
 
         Optional<Signature> match = functionSignatureMatcher.match(candidates, parameterTypes, true);
         if (match.isPresent()) {
+            if (NATIVE_WHITE_LISTED_FUNCTIONS.contains(match.get().getName().getObjectName())) {
+                return builtInTypeAndFunctionNamespaceManager.getFunctionHandle(transactionHandle, match.get());
+            }
             return functionNamespaceManager.getFunctionHandle(transactionHandle, match.get());
         }
 
@@ -837,7 +844,7 @@ public class FunctionAndTypeManager
             throw new PrestoException(FUNCTION_NOT_FOUND, format("Cannot find function namespace for signature '%s'", functionName));
         }
 
-        Collection<SqlFunction> candidates = (Collection<SqlFunction>) functionNamespaceManager.get().getFunctions(Optional.empty(), functionName);
+        Collection<? extends SqlFunction> candidates = getCandidates(functionName, Optional.empty(), functionNamespaceManager.get());
 
         // search for exact match
         Type returnType = getType(signature.getReturnType());
@@ -900,6 +907,24 @@ public class FunctionAndTypeManager
     {
         return servingTypeManager.get().getParametricTypes().stream()
                 .collect(toImmutableMap(ParametricType::getName, parametricType -> parametricType));
+    }
+
+    // todo: hack to support coordinator only fns when default namespace is switched
+    private Collection<? extends SqlFunction> getCandidates(
+            QualifiedObjectName functionName,
+            Optional<? extends FunctionNamespaceTransactionHandle> transactionHandle,
+            FunctionNamespaceManager<?> functionNamespaceManager)
+    {
+        Collection<? extends SqlFunction> candidates;
+        if (NATIVE_WHITE_LISTED_FUNCTIONS.contains(functionName.getObjectName())) {
+            candidates =
+                    builtInTypeAndFunctionNamespaceManager.getFunctions(
+                            transactionHandle, QualifiedObjectName.valueOf(JAVA_BUILTIN_NAMESPACE, functionName.getObjectName()));
+        }
+        else {
+            candidates = functionNamespaceManager.getFunctions(transactionHandle, functionName);
+        }
+        return candidates;
     }
 
     private static class FunctionResolutionCacheKey
