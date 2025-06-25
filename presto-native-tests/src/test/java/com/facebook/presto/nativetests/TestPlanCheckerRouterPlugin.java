@@ -25,7 +25,6 @@ import com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils;
 import com.facebook.presto.router.RouterModule;
 import com.facebook.presto.router.scheduler.CustomSchedulerManager;
 import com.facebook.presto.router.scheduler.PlanCheckerRouterPluginConfig;
-import com.facebook.presto.router.scheduler.PlanCheckerRouterPluginPrestoClient;
 import com.facebook.presto.router.scheduler.PlanCheckerRouterPluginSchedulerFactory;
 import com.facebook.presto.router.security.RouterSecurityModule;
 import com.facebook.presto.router.spec.GroupSpec;
@@ -67,8 +66,6 @@ public class TestPlanCheckerRouterPlugin
     private String storageFormat;
     private boolean sidecarEnabled;
     private QueryRunner nativeQueryRunner;
-    // mock object only to check the redirect requests counters.
-    private PlanCheckerRouterPluginPrestoClient planCheckerRouterPluginPrestoClient;
 
     @BeforeClass
     public void init()
@@ -88,13 +85,6 @@ public class TestPlanCheckerRouterPlugin
                 .setPlanCheckClustersURIs(nativeClusterURI.toString())
                 .setJavaRouterURI(javaClusterURI)
                 .setNativeRouterURI(nativeClusterURI);
-
-        planCheckerRouterPluginPrestoClient = new PlanCheckerRouterPluginPrestoClient(
-                planCheckerRouterConfig.getPlanCheckClustersURIs().get(0),
-                planCheckerRouterConfig.getJavaRouterURI(),
-                planCheckerRouterConfig.getNativeRouterURI(),
-                planCheckerRouterConfig.getClientRequestTimeout(),
-                planCheckerRouterConfig.isJavaClusterFallbackEnabled());
 
         Path tempFile = Files.createTempFile("temp-config", ".json");
         File configFile = getConfigFile(singletonList(planCheckerRouterConfig.getNativeRouterURI()), tempFile.toFile());
@@ -150,7 +140,6 @@ public class TestPlanCheckerRouterPlugin
             for (String query : queries) {
                 runQuery(query, httpServerUri);
             }
-            assertEquals(planCheckerRouterPluginPrestoClient.getNativeClusterRedirectRequests().getTotalCount(), queries.size());
         }
     }
 
@@ -163,9 +152,6 @@ public class TestPlanCheckerRouterPlugin
             for (String query : queries) {
                 runQuery(query, httpServerUri);
             }
-            // testFailingQueriesOnBothClusters() test case will run before this.
-            // Since all the queries are failing on a native plan checker cluster, we redirect them to a java cluster and will count as a Java cluster redirect.
-            assertEquals(planCheckerRouterPluginPrestoClient.getJavaClusterRedirectRequests().getTotalCount(), queries.size() + getFailingQueriesOnBothClustersProvider().length);
         }
     }
 

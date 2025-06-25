@@ -37,9 +37,10 @@ public class PlanCheckerRouterPluginScheduler
     private final URI nativeRouterURI;
     private final Duration clientRequestTimeout;
     private final boolean javaClusterFallbackEnabled;
+    private final RequestStats requestStats;
 
     @Inject
-    public PlanCheckerRouterPluginScheduler(PlanCheckerRouterPluginConfig planCheckerRouterConfig)
+    public PlanCheckerRouterPluginScheduler(PlanCheckerRouterPluginConfig planCheckerRouterConfig, RequestStats requestStats)
     {
         requireNonNull(planCheckerRouterConfig, "PlanCheckerRouterPluginConfig is null");
         this.planCheckerClusterCandidates =
@@ -50,12 +51,13 @@ public class PlanCheckerRouterPluginScheduler
                 requireNonNull(planCheckerRouterConfig.getNativeRouterURI(), "nativeRouterURI is null");
         this.clientRequestTimeout = planCheckerRouterConfig.getClientRequestTimeout();
         this.javaClusterFallbackEnabled = planCheckerRouterConfig.isJavaClusterFallbackEnabled();
+        this.requestStats = requireNonNull(requestStats, "requestStats is null");
     }
 
     @Override
     public Optional<URI> getDestination(RouterRequestInfo routerRequestInfo)
     {
-        PlanCheckerRouterPluginPrestoClient planCheckerPrestoClient = new PlanCheckerRouterPluginPrestoClient(getValidatorDestination(), javaRouterURI, nativeRouterURI, clientRequestTimeout, javaClusterFallbackEnabled);
+        PlanCheckerRouterPluginPrestoClient planCheckerPrestoClient = new PlanCheckerRouterPluginPrestoClient(getValidatorDestination(), javaRouterURI, nativeRouterURI, clientRequestTimeout, javaClusterFallbackEnabled, requestStats);
         return planCheckerPrestoClient.getCompatibleClusterURI(routerRequestInfo.getHeaders(), routerRequestInfo.getQuery(), routerRequestInfo.getPrincipal());
     }
 

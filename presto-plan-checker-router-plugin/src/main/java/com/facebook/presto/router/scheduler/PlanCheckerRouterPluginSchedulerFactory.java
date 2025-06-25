@@ -18,6 +18,11 @@ import com.facebook.presto.spi.router.Scheduler;
 import com.facebook.presto.spi.router.SchedulerFactory;
 import com.google.inject.Injector;
 
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
+import java.lang.management.ManagementFactory;
 import java.util.Map;
 
 import static com.google.common.base.Throwables.throwIfUnchecked;
@@ -43,6 +48,20 @@ public class PlanCheckerRouterPluginSchedulerFactory
                     .doNotInitializeLogging()
                     .setRequiredConfigurationProperties(config)
                     .initialize();
+
+            try {
+                RequestStats stats = injector.getInstance(RequestStats.class);
+                ObjectName name = new ObjectName("com.facebook.presto.router.scheduler:type=RequestStats");
+                MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+
+                if (!mbs.isRegistered(name)) {
+                    mbs.registerMBean(stats, name);
+                }
+            }
+            catch (InstanceAlreadyExistsException ignored) {
+                // ignore if the MBean is already registered
+            }
+
             return injector.getInstance(PlanCheckerRouterPluginScheduler.class);
         }
         catch (Exception e) {

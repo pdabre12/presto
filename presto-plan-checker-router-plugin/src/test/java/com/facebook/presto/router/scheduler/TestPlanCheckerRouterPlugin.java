@@ -103,7 +103,7 @@ public class TestPlanCheckerRouterPlugin
     @Test
     public void testPlanCheckerPluginWithNativeCompatibleQueries()
     {
-        Scheduler scheduler = new PlanCheckerRouterPluginScheduler(planCheckerRouterConfig);
+        Scheduler scheduler = new PlanCheckerRouterPluginScheduler(planCheckerRouterConfig, new RequestStats());
         scheduler.setCandidates(planCheckerRouterConfig.getPlanCheckClustersURIs());
 
         // native compatible query
@@ -122,7 +122,7 @@ public class TestPlanCheckerRouterPlugin
     @Test
     public void testPlanCheckerPluginWithNativeIncompatibleQueries()
     {
-        Scheduler scheduler = new PlanCheckerRouterPluginScheduler(planCheckerRouterConfig);
+        Scheduler scheduler = new PlanCheckerRouterPluginScheduler(planCheckerRouterConfig, new RequestStats());
         scheduler.setCandidates(planCheckerRouterConfig.getPlanCheckClustersURIs());
 
         // native incompatible query
