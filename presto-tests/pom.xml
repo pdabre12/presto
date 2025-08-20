@@ -452,6 +452,7 @@
                         <ignoredNonTestScopedDependency>com.facebook.presto:presto-function-namespace-managers-common</ignoredNonTestScopedDependency>
                         <ignoredNonTestScopedDependency>com.facebook.airlift.drift:drift-codec</ignoredNonTestScopedDependency>
                         <ignoredNonTestScopedDependency>com.facebook.airlift:jaxrs</ignoredNonTestScopedDependency>
+                        <ignoredNonTestScopedDependency>com.facebook.airlift:node</ignoredNonTestScopedDependency>
                     </ignoredNonTestScopedDependencies>
                 </configuration>
             </plugin>

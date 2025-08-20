@@ -28,8 +28,7 @@ import com.facebook.presto.spi.relation.SpecialFormExpression;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-
-import javax.inject.Inject;
+import com.google.inject.Inject;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
