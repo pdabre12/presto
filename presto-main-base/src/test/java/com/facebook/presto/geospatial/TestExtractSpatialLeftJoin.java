@@ -310,7 +310,7 @@ public class TestExtractSpatialLeftJoin
     private RuleAssert assertRuleApplication()
     {
         RuleTester tester = tester();
-        return tester().assertThat(new ExtractSpatialLeftJoin(tester.getMetadata(), tester.getSplitManager(), tester.getPageSourceManager()));
+        return tester().assertThat(new ExtractSpatialLeftJoin(tester.getMetadata(), tester.getSplitManager(), tester.getPageSourceManager(), false));
     }
 
     private RowExpression sqlToRowExpression(String sql, Map<String, Type> typeMap)

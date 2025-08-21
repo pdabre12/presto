@@ -841,7 +841,7 @@ public class PlanOptimizers
                 costCalculator,
                 ImmutableSet.<Rule<?>>builder()
                         .add(new RemoveRedundantIdentityProjections())
-                        .addAll(new ExtractSpatialJoins(metadata, splitManager, pageSourceManager).rules())
+                        .addAll(new ExtractSpatialJoins(metadata, splitManager, pageSourceManager, featuresConfig.isNativeExecutionEnabled()).rules())
                         .add(new InlineProjections(metadata.getFunctionAndTypeManager()))
                         .build()));
 

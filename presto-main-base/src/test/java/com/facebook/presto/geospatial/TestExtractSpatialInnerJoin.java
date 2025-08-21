@@ -469,7 +469,7 @@ public class TestExtractSpatialInnerJoin
     private RuleAssert assertRuleApplication()
     {
         RuleTester tester = tester();
-        return tester.assertThat(new ExtractSpatialInnerJoin(tester.getMetadata(), tester.getSplitManager(), tester.getPageSourceManager()));
+        return tester.assertThat(new ExtractSpatialInnerJoin(tester.getMetadata(), tester.getSplitManager(), tester.getPageSourceManager(), false));
     }
 
     private RowExpression sqlToRowExpression(String sql, Map<String, Type> typeMap)
