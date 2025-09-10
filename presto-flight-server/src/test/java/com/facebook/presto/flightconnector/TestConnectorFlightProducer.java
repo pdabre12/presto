@@ -131,6 +131,7 @@ public class TestConnectorFlightProducer
         }
         catch (Exception e) {
             int stop = 1;
+            throw e;
         }
     }
 

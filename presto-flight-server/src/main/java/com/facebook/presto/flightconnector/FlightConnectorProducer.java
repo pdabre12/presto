@@ -37,6 +37,7 @@ import com.facebook.presto.spi.security.Identity;
 import com.facebook.presto.spi.transaction.IsolationLevel;
 import com.facebook.presto.split.RecordPageSourceProvider;
 import com.google.common.collect.ImmutableList;
+import org.apache.arrow.flight.CallStatus;
 import org.apache.arrow.flight.FlightServer;
 import org.apache.arrow.flight.Location;
 import org.apache.arrow.flight.NoOpFlightProducer;
@@ -54,6 +55,8 @@ import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 import static com.facebook.presto.metadata.SessionPropertyManager.createTestingSessionPropertyManager;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.testing.TestingSession.DEFAULT_TIME_ZONE_KEY;
+import static com.google.common.base.MoreObjects.firstNonNull;
+import static java.lang.String.format;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
@@ -72,55 +75,61 @@ public class FlightConnectorProducer
     @Override
     public void getStream(CallContext context, Ticket ticket, ServerStreamListener listener)
     {
-        String ticketString = new String(ticket.getBytes(), StandardCharsets.UTF_8);
+        try {
+            String ticketString = new String(ticket.getBytes(), StandardCharsets.UTF_8);
 
-        JdbcSplit jdbcSplit = codec.fromJson(ticketString);
+            JdbcSplit jdbcSplit = codec.fromJson(ticketString);
 
-        // TODO: need to be in ticket
-        //String pluginName = "jmx";
-        //String query = "SELECT * FROM java.lang:type=OperatingSystem";
+            // TODO: need to be in ticket
+            //String pluginName = "jmx";
+            //String query = "SELECT * FROM java.lang:type=OperatingSystem";
 
-        Connector connector = pluginManager.getConnector(jdbcSplit.getConnectorId());
-        if (connector != null) {
-            ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
+            Connector connector = pluginManager.getConnector(jdbcSplit.getConnectorId());
+            if (connector != null) {
+                ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
 
-            //RecordPageSourceProvider connectorPageSourceProvider = new RecordPageSourceProvider(connectorRecordSetProvider);
-            //ConnectorPageSource source = connectorPageSourceProvider.createPageSource(transactionHandle, SESSION, jdbcSplit, ConnectorTableLayout, );
-            // Page page = source.getNextPage();
+                //RecordPageSourceProvider connectorPageSourceProvider = new RecordPageSourceProvider(connectorRecordSetProvider);
+                //ConnectorPageSource source = connectorPageSourceProvider.createPageSource(transactionHandle, SESSION, jdbcSplit, ConnectorTableLayout, );
+                // Page page = source.getNextPage();
 
-            // TODO remove
-            ColumnHandle columnHandle = new JdbcColumnHandle(
-                    jdbcSplit.getConnectorId(),
-                    "orderkey",
-                    new JdbcTypeHandle(Types.BIGINT, "bigint", 8, 0),
-                    BigintType.BIGINT,
-                    false,
-                    Optional.empty()
-            );
-            ///////////////
+                // TODO remove
+                ColumnHandle columnHandle = new JdbcColumnHandle(
+                        jdbcSplit.getConnectorId(),
+                        "orderkey",
+                        new JdbcTypeHandle(Types.BIGINT, "bigint", 8, 0),
+                        BigintType.BIGINT,
+                        false,
+                        Optional.empty()
+                );
+                ///////////////
 
-            ConnectorTransactionHandle transactionHandle = connector.beginTransaction(IsolationLevel.READ_COMMITTED, true);
+                ConnectorTransactionHandle transactionHandle = connector.beginTransaction(IsolationLevel.READ_COMMITTED, true);
 
-            QueryIdGenerator queryIdGenerator = new QueryIdGenerator();
-            Session session = Session.builder(createTestingSessionPropertyManager())
-                .setQueryId(queryIdGenerator.createNextQueryId())
-                .setIdentity(new Identity("user", Optional.empty()))
-                .setCatalog(jdbcSplit.getCatalogName())
-                .setSchema(jdbcSplit.getSchemaName())
-                .setTimeZoneKey(DEFAULT_TIME_ZONE_KEY)
-                .setLocale(ENGLISH).build();
-            ConnectorId connectorId = new ConnectorId(jdbcSplit.getCatalogName());
-            ConnectorSession connectorSession = session.toConnectorSession(connectorId);
-            RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, jdbcSplit, ImmutableList.of(columnHandle));
+                String catalogName = firstNonNull(jdbcSplit.getCatalogName(), jdbcSplit.getConnectorId());
 
-            try (RecordCursor cursor = recordSet.cursor()) {
+                QueryIdGenerator queryIdGenerator = new QueryIdGenerator();
+                Session session = Session.builder(createTestingSessionPropertyManager())
+                        .setQueryId(queryIdGenerator.createNextQueryId())
+                        .setIdentity(new Identity("user", Optional.empty()))
+                        .setCatalog(catalogName)
+                        .setSchema(jdbcSplit.getSchemaName())
+                        .setTimeZoneKey(DEFAULT_TIME_ZONE_KEY)
+                        .setLocale(ENGLISH).build();
+                ConnectorId connectorId = new ConnectorId(catalogName);
+                ConnectorSession connectorSession = session.toConnectorSession(connectorId);
+                RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, jdbcSplit, ImmutableList.of(columnHandle));
 
-                int stop = 10;
+                try (RecordCursor cursor = recordSet.cursor()) {
 
+                    int stop = 10;
+                }
             }
-
-        } else {
-            throw new PrestoException(GENERIC_INTERNAL_ERROR, "Requested connector not loaded: " + jdbcSplit.getConnectorId());
+            else {
+                throw new PrestoException(GENERIC_INTERNAL_ERROR, "Requested connector not loaded: " + jdbcSplit.getConnectorId());
+            }
+        }
+        catch (Exception e) {
+            listener.error(CallStatus.INTERNAL.withDescription("Error getting connector flight stream: " + e.getMessage()).withCause(e).toRuntimeException());
         }
     }
 }
