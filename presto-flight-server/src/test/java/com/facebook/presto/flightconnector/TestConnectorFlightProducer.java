@@ -14,14 +14,21 @@
 package com.facebook.presto.flightconnector;
 
 import com.facebook.airlift.bootstrap.Bootstrap;
+import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.log.Logger;
 
 import com.facebook.airlift.testing.postgresql.TestingPostgreSqlServer;
 
+import com.facebook.presto.common.type.BigintType;
+import com.facebook.presto.common.type.IntegerType;
+import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
+import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.plugin.postgresql.PostgreSqlQueryRunner;
+import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.AbstractTestQueryFramework;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Injector;
 import io.airlift.tpch.TpchTable;
@@ -47,13 +54,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+import java.sql.Types;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 
 public class TestConnectorFlightProducer
         extends AbstractTestQueryFramework
 {
     private static final CallOption CALL_OPTIONS = CallOptions.timeout(300, TimeUnit.SECONDS);
+    private static final JsonCodec<FlightConnectorRequest> REQUEST_JSON_CODEC = jsonCodec(FlightConnectorRequest.class);
+    private static final JsonCodec<JdbcColumnHandle> COLUMN_HANDLE_JSON_CODEC = jsonCodec(JdbcColumnHandle.class);
     private final TestingPostgreSqlServer postgreSqlServer;
     private RootAllocator allocator;
     private FlightServer server;
@@ -119,8 +131,50 @@ public class TestConnectorFlightProducer
                     "    \"columnDomains\" : [ ]\n" +
                     "  }\n" +
                     "}";
+            split = "{\n" +
+                    "  \"connectorId\" : \"postgresql\",\n" +
+                    "  \"schemaName\" : \"public\",\n" +
+                    "  \"tableName\" : \"airline\",\n" +
+                    "  \"tupleDomain\" : {\n" +
+                    "    \"columnDomains\" : [ ]\n" +
+                    "  }\n" +
+                    "}";
+            byte[] splitBytes = split.getBytes(StandardCharsets.UTF_8);
 
-            Ticket ticket = new Ticket(split.getBytes(StandardCharsets.UTF_8));
+            JdbcColumnHandle columnHandle = new JdbcColumnHandle(
+                    "postgresql",
+                    "orderkey",
+                    new JdbcTypeHandle(Types.BIGINT, "bigint", 8, 0),
+                    BigintType.BIGINT,
+                    false,
+                    Optional.empty()
+            );
+            columnHandle = new JdbcColumnHandle(
+                    "postgresql",
+                    "year",
+                    new JdbcTypeHandle(Types.INTEGER, "int", 4, 0),
+                    IntegerType.INTEGER,
+                    false,
+                    Optional.empty()
+            );
+            JdbcColumnHandle columnHandle2 = new JdbcColumnHandle(
+                    "postgresql",
+                    "originairportseqid",
+                    new JdbcTypeHandle(Types.INTEGER, "int", 4, 0),
+                    IntegerType.INTEGER,
+                    false,
+                    Optional.empty()
+            );
+            byte[] columnHandleBytes = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle);
+            byte[] columnHandleBytes2 = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle2);
+
+            FlightConnectorRequest request = new FlightConnectorRequest(
+                    "postgresql",
+                    splitBytes,
+                    ImmutableList.of(columnHandleBytes, columnHandleBytes2));
+            byte[] requestBytes = REQUEST_JSON_CODEC.toJsonBytes(request);
+
+            Ticket ticket = new Ticket(requestBytes);
 
             try (FlightStream stream = client.getStream(ticket, CALL_OPTIONS)) {
                 while (stream.next()) {

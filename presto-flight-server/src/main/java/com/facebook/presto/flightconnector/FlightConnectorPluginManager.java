@@ -13,11 +13,16 @@
  */
 package com.facebook.presto.flightconnector;
 
+import com.facebook.airlift.json.JsonCodec;
+import com.facebook.airlift.json.JsonCodecFactory;
+import com.facebook.airlift.json.JsonObjectMapperProvider;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.GroupByHashPageIndexerFactory;
 import com.facebook.presto.PagesIndexPageSorter;
 import com.facebook.presto.common.block.BlockEncodingManager;
 import com.facebook.presto.common.block.BlockEncodingSerde;
+import com.facebook.presto.common.type.StandardTypes;
+import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.connector.ConnectorAwareNodeManager;
 import com.facebook.presto.cost.ConnectorFilterStatsCalculatorService;
@@ -34,8 +39,11 @@ import com.facebook.presto.operator.PagesIndex;
 import com.facebook.presto.server.PluginInstaller;
 import com.facebook.presto.server.PluginManagerConfig;
 import com.facebook.presto.server.PluginManagerUtil;
+import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ConnectorHandleResolver;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
+import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorSystemConfig;
 import com.facebook.presto.spi.CoordinatorPlugin;
 import com.facebook.presto.spi.NodeManager;
@@ -63,6 +71,9 @@ import com.facebook.presto.sql.relational.FunctionResolution;
 import com.facebook.presto.sql.relational.RowExpressionDeterminismEvaluator;
 import com.facebook.presto.sql.relational.RowExpressionDomainTranslator;
 import com.facebook.presto.sql.relational.RowExpressionOptimizer;
+import com.facebook.presto.type.TypeDeserializer;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.deser.std.FromStringDeserializer;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -78,12 +89,17 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.facebook.presto.common.type.BigintType.BIGINT;
+import static com.facebook.presto.common.type.IntegerType.INTEGER;
+import static com.facebook.presto.common.type.VarcharType.VARCHAR;
 import static com.facebook.presto.metadata.FunctionAndTypeManager.createTestFunctionAndTypeManager;
 import static com.facebook.presto.server.PluginManagerUtil.SPI_PACKAGES;
 import static com.facebook.presto.util.PropertiesUtil.loadProperties;
 import static com.google.api.client.util.Preconditions.checkState;
 import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
+import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
 public class FlightConnectorPluginManager
@@ -91,7 +107,7 @@ public class FlightConnectorPluginManager
     private static final Logger log = Logger.get(FlightConnectorPluginManager.class);
     private static final String SERVICES_FILE = "META-INF/services/" + Plugin.class.getName();
     private final Map<String, ConnectorFactory> connectorFactories = new ConcurrentHashMap<>();
-    private final Map<String, Connector> connectors = new ConcurrentHashMap<>();
+    private final Map<String, ConnectorHolder> connectors = new ConcurrentHashMap<>();
     private final File installedPluginsDir;
     private final List<String> plugins;
     private final ArtifactResolver resolver;
@@ -215,7 +231,7 @@ public class FlightConnectorPluginManager
         }
     }
 
-    public Connector getConnector(String connectorId) {
+    public ConnectorHolder getConnector(String connectorId) {
         CatalogPropertiesHolder catalogPropertiesHolder = catalogPropertiesMap.get(connectorId);
         if (catalogPropertiesHolder == null) {
             // TODO PrestoEx
@@ -247,7 +263,7 @@ public class FlightConnectorPluginManager
             FlightConnectorContext context = new FlightConnectorContext();
 
             try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(factory.getClass().getClassLoader())) {
-                return factory.create(name, config, context);
+                return new ConnectorHolder(factory.create(name, config, context), factory.getHandleResolver());
             }
         });
     }
@@ -392,6 +408,71 @@ public class FlightConnectorPluginManager
         public ConnectorSystemConfig getConnectorSystemConfig()
         {
             return () -> false;
+        }
+    }
+
+    static class ConnectorHolder
+    {
+        private final Connector connector;
+        private final ConnectorHandleResolver resolver;
+        private final JsonCodec<? extends ConnectorSplit> codecSplit;
+        private final JsonCodec<? extends ColumnHandle> codecColumnHandle;
+
+        ConnectorHolder(Connector connector, ConnectorHandleResolver resolver)
+        {
+            this.connector = connector;
+            this.resolver = resolver;
+            this.codecSplit = JsonCodec.jsonCodec(resolver.getSplitClass());
+            //this.codecColumnHandle = JsonCodec.jsonCodec(resolver.getColumnHandleClass());
+            JsonObjectMapperProvider provider = new JsonObjectMapperProvider();
+            provider.setJsonDeserializers(ImmutableMap.of(Type.class, new TestingTypeDeserializer()));
+            this.codecColumnHandle = new JsonCodecFactory(provider).jsonCodec(resolver.getColumnHandleClass());
+        }
+
+        Connector getConnector()
+        {
+            return connector;
+        }
+
+        JsonCodec<? extends ConnectorSplit> getCodecSplit()
+        {
+            return codecSplit;
+        }
+
+        JsonCodec<? extends ColumnHandle> getCodecColumnHandle()
+        {
+            return codecColumnHandle;
+        }
+
+        ConnectorHandleResolver getResolver()
+        {
+            return resolver;
+        }
+    }
+
+    public static final class TestingTypeDeserializer
+            extends FromStringDeserializer<Type>
+    {
+        private final Map<String, Type> types = ImmutableMap.of(
+                StandardTypes.INTEGER, INTEGER,
+                StandardTypes.BIGINT, BIGINT,
+                StandardTypes.VARCHAR, VARCHAR);
+
+        public TestingTypeDeserializer()
+        {
+            super(Type.class);
+        }
+
+        @Override
+        protected Type _deserialize(String value, DeserializationContext context)
+        {
+            Type type = types.get(value.toLowerCase(ENGLISH));
+            //checkArgument(type != null, "Unknown type %s", value);
+            // TODO: don't think this is used but..
+            if (type == null) {
+                type = VARCHAR;
+            }
+            return type;
         }
     }
 }

@@ -20,12 +20,12 @@ import com.facebook.presto.common.Subfield;
 import com.facebook.presto.common.type.BigintType;
 import com.facebook.presto.execution.QueryIdGenerator;
 import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
-import com.facebook.presto.plugin.jdbc.JdbcSplit;
 import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorPageSource;
 import com.facebook.presto.spi.ConnectorSession;
+import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorTableLayout;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.RecordCursor;
@@ -50,6 +50,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 import static com.facebook.presto.metadata.SessionPropertyManager.createTestingSessionPropertyManager;
@@ -63,7 +64,7 @@ import static java.util.Objects.requireNonNull;
 public class FlightConnectorProducer
         extends NoOpFlightProducer
 {
-    private static final JsonCodec<JdbcSplit> codec = jsonCodec(JdbcSplit.class);
+    private static final JsonCodec<FlightConnectorRequest> REQUEST_JSON_CODEC = jsonCodec(FlightConnectorRequest.class);
     private final FlightConnectorPluginManager pluginManager;
 
     @Inject
@@ -76,16 +77,24 @@ public class FlightConnectorProducer
     public void getStream(CallContext context, Ticket ticket, ServerStreamListener listener)
     {
         try {
-            String ticketString = new String(ticket.getBytes(), StandardCharsets.UTF_8);
+            FlightConnectorRequest request = REQUEST_JSON_CODEC.fromJson(ticket.getBytes());
 
-            JdbcSplit jdbcSplit = codec.fromJson(ticketString);
+            //JsonCodec<com.facebook.presto.plugin.jdbc.JdbcSplit> codec = jsonCodec(com.facebook.presto.plugin.jdbc.JdbcSplit.class);
+            //com.facebook.presto.plugin.jdbc.JdbcSplit jdbcSplit = codec.fromJson(ticketString);
 
             // TODO: need to be in ticket
             //String pluginName = "jmx";
             //String query = "SELECT * FROM java.lang:type=OperatingSystem";
 
-            Connector connector = pluginManager.getConnector(jdbcSplit.getConnectorId());
-            if (connector != null) {
+            FlightConnectorPluginManager.ConnectorHolder connectorHolder = pluginManager.getConnector(request.getConnectorId());
+            if (connectorHolder != null) {
+                Connector connector = connectorHolder.getConnector();
+                ConnectorSplit split = connectorHolder.getCodecSplit().fromJson(request.getSplitBytes());
+
+                List<? extends ColumnHandle> columnHandles =request.getColumnHandlesBytes().stream().map(
+                        columnHandleBytes -> connectorHolder.getCodecColumnHandle().fromJson(columnHandleBytes)
+                ).collect(Collectors.toList());
+
                 ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
 
                 //RecordPageSourceProvider connectorPageSourceProvider = new RecordPageSourceProvider(connectorRecordSetProvider);
@@ -93,39 +102,35 @@ public class FlightConnectorProducer
                 // Page page = source.getNextPage();
 
                 // TODO remove
-                ColumnHandle columnHandle = new JdbcColumnHandle(
-                        jdbcSplit.getConnectorId(),
-                        "orderkey",
-                        new JdbcTypeHandle(Types.BIGINT, "bigint", 8, 0),
-                        BigintType.BIGINT,
-                        false,
-                        Optional.empty()
-                );
+                String catalogName = request.getConnectorId();
+                String schemaName = "tpch";
                 ///////////////
 
                 ConnectorTransactionHandle transactionHandle = connector.beginTransaction(IsolationLevel.READ_COMMITTED, true);
-
-                String catalogName = firstNonNull(jdbcSplit.getCatalogName(), jdbcSplit.getConnectorId());
 
                 QueryIdGenerator queryIdGenerator = new QueryIdGenerator();
                 Session session = Session.builder(createTestingSessionPropertyManager())
                         .setQueryId(queryIdGenerator.createNextQueryId())
                         .setIdentity(new Identity("user", Optional.empty()))
                         .setCatalog(catalogName)
-                        .setSchema(jdbcSplit.getSchemaName())
+                        .setSchema(schemaName)
                         .setTimeZoneKey(DEFAULT_TIME_ZONE_KEY)
                         .setLocale(ENGLISH).build();
                 ConnectorId connectorId = new ConnectorId(catalogName);
                 ConnectorSession connectorSession = session.toConnectorSession(connectorId);
-                RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, jdbcSplit, ImmutableList.of(columnHandle));
+                RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, split, columnHandles);
 
                 try (RecordCursor cursor = recordSet.cursor()) {
-
+                    while (cursor.advanceNextPosition()) {
+                        long result = cursor.getLong(0);
+                        long result2 = cursor.getLong(1);
+                        int blah = 0;
+                    }
                     int stop = 10;
                 }
             }
             else {
-                throw new PrestoException(GENERIC_INTERNAL_ERROR, "Requested connector not loaded: " + jdbcSplit.getConnectorId());
+                throw new PrestoException(GENERIC_INTERNAL_ERROR, "Requested connector not loaded: " + request.getConnectorId());
             }
         }
         catch (Exception e) {
