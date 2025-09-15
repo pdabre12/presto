@@ -224,7 +224,7 @@
         <module>presto-router-example-plugin-scheduler</module>
         <module>presto-plan-checker-router-plugin</module>
         <module>presto-sql-invoked-functions-plugin</module>
-        <module>presto-flight-server</module>
+        <module>presto-flight-shim</module>
     </modules>
 
     <dependencyManagement>
