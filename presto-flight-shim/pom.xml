@@ -8,9 +8,9 @@
         <version>0.295-SNAPSHOT</version>
     </parent>
 
-    <artifactId>presto-flight-server</artifactId>
-    <name>presto-flight-server</name>
-    <description>Presto - Apache Arrow Flight server for federation </description>
+    <artifactId>presto-flight-shim</artifactId>
+    <name>presto-flight-shim</name>
+    <description>Presto - Shim with Apache Arrow Flight server for Presto native federation </description>
 
     <properties>
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>

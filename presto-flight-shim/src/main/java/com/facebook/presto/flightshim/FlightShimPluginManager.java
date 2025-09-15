@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.json.JsonCodecFactory;
@@ -24,7 +24,6 @@ import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
-import com.facebook.presto.connector.ConnectorAwareNodeManager;
 import com.facebook.presto.cost.ConnectorFilterStatsCalculatorService;
 import com.facebook.presto.cost.FilterStatsCalculator;
 import com.facebook.presto.cost.ScalarStatsCalculator;
@@ -41,7 +40,6 @@ import com.facebook.presto.server.PluginManagerConfig;
 import com.facebook.presto.server.PluginManagerUtil;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorHandleResolver;
-import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorSystemConfig;
@@ -71,7 +69,6 @@ import com.facebook.presto.sql.relational.FunctionResolution;
 import com.facebook.presto.sql.relational.RowExpressionDeterminismEvaluator;
 import com.facebook.presto.sql.relational.RowExpressionDomainTranslator;
 import com.facebook.presto.sql.relational.RowExpressionOptimizer;
-import com.facebook.presto.type.TypeDeserializer;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.FromStringDeserializer;
 import com.google.common.collect.ImmutableList;
@@ -82,7 +79,6 @@ import com.google.inject.Inject;
 import io.airlift.resolver.ArtifactResolver;
 
 import java.io.File;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -102,9 +98,9 @@ import static java.lang.String.format;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
-public class FlightConnectorPluginManager
+public class FlightShimPluginManager
 {
-    private static final Logger log = Logger.get(FlightConnectorPluginManager.class);
+    private static final Logger log = Logger.get(FlightShimPluginManager.class);
     private static final String SERVICES_FILE = "META-INF/services/" + Plugin.class.getName();
     private final Map<String, ConnectorFactory> connectorFactories = new ConcurrentHashMap<>();
     private final Map<String, ConnectorHolder> connectors = new ConcurrentHashMap<>();
@@ -121,7 +117,7 @@ public class FlightConnectorPluginManager
     private final Map<String, CatalogPropertiesHolder> catalogPropertiesMap = new ConcurrentHashMap<>();
 
     @Inject
-    public FlightConnectorPluginManager(PluginManagerConfig pluginManagerConfig, StaticCatalogStoreConfig catalogStoreConfig)
+    public FlightShimPluginManager(PluginManagerConfig pluginManagerConfig, StaticCatalogStoreConfig catalogStoreConfig)
     {
         requireNonNull(pluginManagerConfig, "pluginManagerConfig is null");
         requireNonNull(catalogStoreConfig, "pluginManagerConfig is null");

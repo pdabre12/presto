@@ -11,11 +11,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
-import com.facebook.airlift.bootstrap.Bootstrap;
 import com.facebook.airlift.json.JsonCodec;
-import com.facebook.airlift.log.Logger;
 
 import com.facebook.airlift.testing.postgresql.TestingPostgreSqlServer;
 
@@ -24,13 +22,11 @@ import com.facebook.presto.common.type.IntegerType;
 import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
 import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.plugin.postgresql.PostgreSqlQueryRunner;
-import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.AbstractTestQueryFramework;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.inject.Injector;
 import io.airlift.tpch.TpchTable;
 import org.apache.arrow.flight.CallOption;
 import org.apache.arrow.flight.CallOptions;
@@ -46,13 +42,9 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import java.sql.Types;
 import java.util.Optional;
@@ -60,17 +52,17 @@ import java.util.concurrent.TimeUnit;
 
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 
-public class TestConnectorFlightProducer
+public class TestFlightShimProducer
         extends AbstractTestQueryFramework
 {
     private static final CallOption CALL_OPTIONS = CallOptions.timeout(300, TimeUnit.SECONDS);
-    private static final JsonCodec<FlightConnectorRequest> REQUEST_JSON_CODEC = jsonCodec(FlightConnectorRequest.class);
+    private static final JsonCodec<FlightShimRequest> REQUEST_JSON_CODEC = jsonCodec(FlightShimRequest.class);
     private static final JsonCodec<JdbcColumnHandle> COLUMN_HANDLE_JSON_CODEC = jsonCodec(JdbcColumnHandle.class);
     private final TestingPostgreSqlServer postgreSqlServer;
     private RootAllocator allocator;
     private FlightServer server;
 
-    public TestConnectorFlightProducer()
+    public TestFlightShimProducer()
             throws Exception
     {
         this.postgreSqlServer = new TestingPostgreSqlServer("testuser", "tpch");
@@ -88,7 +80,7 @@ public class TestConnectorFlightProducer
         //Location location = Location.forGrpcTls("localhost", findUnusedPort());
         Location location = Location.forGrpcInsecure("localhost", findUnusedPort());
 
-        server = FlightConnectorServer.start(FlightConnectorServer.builder(allocator, location));
+        server = FlightShimServer.start(FlightShimServer.builder(allocator, location));
     }
 
     @Override
@@ -168,7 +160,7 @@ public class TestConnectorFlightProducer
             byte[] columnHandleBytes = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle);
             byte[] columnHandleBytes2 = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle2);
 
-            FlightConnectorRequest request = new FlightConnectorRequest(
+            FlightShimRequest request = new FlightShimRequest(
                     "postgresql",
                     splitBytes,
                     ImmutableList.of(columnHandleBytes, columnHandleBytes2));

@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
 import com.facebook.airlift.configuration.AbstractConfigurationAwareModule;
 import com.facebook.presto.metadata.StaticCatalogStoreConfig;
@@ -21,14 +21,14 @@ import com.google.inject.Scopes;
 
 import static com.facebook.airlift.configuration.ConfigBinder.configBinder;
 
-public class FlightConnectorModule
+public class FlightShimModule
         extends AbstractConfigurationAwareModule
 {
     @Override
     protected void setup(Binder binder)
     {
-        binder.bind(FlightConnectorPluginManager.class).in(Scopes.SINGLETON);
-        binder.bind(FlightConnectorProducer.class).in(Scopes.SINGLETON);
+        binder.bind(FlightShimPluginManager.class).in(Scopes.SINGLETON);
+        binder.bind(FlightShimProducer.class).in(Scopes.SINGLETON);
         configBinder(binder).bindConfig(PluginManagerConfig.class);
         configBinder(binder).bindConfig(StaticCatalogStoreConfig.class);
     }

@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
 import com.facebook.airlift.bootstrap.Bootstrap;
 import com.facebook.airlift.log.Logger;
@@ -26,29 +26,29 @@ import org.apache.arrow.memory.RootAllocator;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-public class FlightConnectorServer
+public class FlightShimServer
 {
-    private FlightConnectorServer()
+    private FlightShimServer()
     {
     }
 
     public static FlightServer start(FlightServer.Builder builder, Module... extraModules)
     {
         Bootstrap app = new Bootstrap(ImmutableList.<Module>builder()
-                .add(new FlightConnectorModule())
+                .add(new FlightShimModule())
                 .add(extraModules)
                 .build());
 
-        Logger log = Logger.get(FlightConnectorModule.class);
+        Logger log = Logger.get(FlightShimModule.class);
         FlightServer server;
         try {
             Injector injector = app.initialize();
 
-            FlightConnectorPluginManager pluginManager = injector.getInstance(FlightConnectorPluginManager.class);
+            FlightShimPluginManager pluginManager = injector.getInstance(FlightShimPluginManager.class);
             pluginManager.loadPlugins();
             pluginManager.loadCatalogs();
 
-            FlightConnectorProducer producer = injector.getInstance(FlightConnectorProducer.class);
+            FlightShimProducer producer = injector.getInstance(FlightShimProducer.class);
             builder.producer(producer);
 
             server = builder.build();

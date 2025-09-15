@@ -11,22 +11,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.presto.Session;
-import com.facebook.presto.common.Page;
-import com.facebook.presto.common.Subfield;
-import com.facebook.presto.common.type.BigintType;
 import com.facebook.presto.execution.QueryIdGenerator;
-import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
-import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorId;
-import com.facebook.presto.spi.ConnectorPageSource;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorSplit;
-import com.facebook.presto.spi.ConnectorTableLayout;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.RecordSet;
@@ -35,19 +28,12 @@ import com.facebook.presto.spi.connector.ConnectorRecordSetProvider;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.facebook.presto.spi.security.Identity;
 import com.facebook.presto.spi.transaction.IsolationLevel;
-import com.facebook.presto.split.RecordPageSourceProvider;
-import com.google.common.collect.ImmutableList;
 import org.apache.arrow.flight.CallStatus;
-import org.apache.arrow.flight.FlightServer;
-import org.apache.arrow.flight.Location;
 import org.apache.arrow.flight.NoOpFlightProducer;
 import org.apache.arrow.flight.Ticket;
-import org.apache.arrow.memory.BufferAllocator;
 
 import javax.inject.Inject;
 
-import java.nio.charset.StandardCharsets;
-import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -56,19 +42,18 @@ import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 import static com.facebook.presto.metadata.SessionPropertyManager.createTestingSessionPropertyManager;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.testing.TestingSession.DEFAULT_TIME_ZONE_KEY;
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.lang.String.format;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
-public class FlightConnectorProducer
+public class FlightShimProducer
         extends NoOpFlightProducer
 {
-    private static final JsonCodec<FlightConnectorRequest> REQUEST_JSON_CODEC = jsonCodec(FlightConnectorRequest.class);
-    private final FlightConnectorPluginManager pluginManager;
+    private static final JsonCodec<FlightShimRequest> REQUEST_JSON_CODEC = jsonCodec(FlightShimRequest.class);
+    private final FlightShimPluginManager pluginManager;
 
     @Inject
-    public FlightConnectorProducer(FlightConnectorPluginManager pluginManager)
+    public FlightShimProducer(FlightShimPluginManager pluginManager)
     {
         this.pluginManager = requireNonNull(pluginManager, "pluginManager is null");;
     }
@@ -77,7 +62,7 @@ public class FlightConnectorProducer
     public void getStream(CallContext context, Ticket ticket, ServerStreamListener listener)
     {
         try {
-            FlightConnectorRequest request = REQUEST_JSON_CODEC.fromJson(ticket.getBytes());
+            FlightShimRequest request = REQUEST_JSON_CODEC.fromJson(ticket.getBytes());
 
             //JsonCodec<com.facebook.presto.plugin.jdbc.JdbcSplit> codec = jsonCodec(com.facebook.presto.plugin.jdbc.JdbcSplit.class);
             //com.facebook.presto.plugin.jdbc.JdbcSplit jdbcSplit = codec.fromJson(ticketString);
@@ -86,7 +71,7 @@ public class FlightConnectorProducer
             //String pluginName = "jmx";
             //String query = "SELECT * FROM java.lang:type=OperatingSystem";
 
-            FlightConnectorPluginManager.ConnectorHolder connectorHolder = pluginManager.getConnector(request.getConnectorId());
+            FlightShimPluginManager.ConnectorHolder connectorHolder = pluginManager.getConnector(request.getConnectorId());
             if (connectorHolder != null) {
                 Connector connector = connectorHolder.getConnector();
                 ConnectorSplit split = connectorHolder.getCodecSplit().fromJson(request.getSplitBytes());

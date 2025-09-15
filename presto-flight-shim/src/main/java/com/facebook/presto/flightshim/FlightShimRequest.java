@@ -11,9 +11,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.flightconnector;
+package com.facebook.presto.flightshim;
 
-import com.facebook.presto.spi.ColumnHandle;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
@@ -22,14 +21,14 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
-public class FlightConnectorRequest
+public class FlightShimRequest
 {
     private final String connectorId;
     private final byte[] splitBytes;
     private final List<byte[]> columnHandlesBytes;
 
     @JsonCreator
-    public FlightConnectorRequest(
+    public FlightShimRequest(
             @JsonProperty("connectorId") String connectorId,
             @JsonProperty("splitBytes") byte[] splitBytes,
             @JsonProperty("columnHandlesBytes") List<byte[]> columnHandlesBytes)
