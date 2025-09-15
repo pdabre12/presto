@@ -82,6 +82,7 @@ import org.weakref.jmx.Nested;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -135,6 +136,7 @@ public class FunctionAndTypeManager
         implements FunctionMetadataManager, TypeManager
 {
     private static final Pattern DEFAULT_NAMESPACE_PREFIX_PATTERN = Pattern.compile("[a-z]+\\.[a-z]+");
+    private static final Set<String> NATIVE_WHITE_LISTED_FUNCTIONS = new HashSet<>(Arrays.asList("now", "current_time", "current_timestamp", "current_timezone", "localtime", "localtimestamp"));
     private static final Logger log = Logger.get(FunctionAndTypeManager.class);
     private final TransactionManager transactionManager;
     private final TableFunctionRegistry tableFunctionRegistry;
@@ -1031,6 +1033,18 @@ public class FunctionAndTypeManager
             List<TypeSignatureProvider> parameterTypes,
             boolean coercionAllowed)
     {
+        // todo: hack to support coordinator only fns when default namespace is switched
+        if (NATIVE_WHITE_LISTED_FUNCTIONS.contains(functionName.getObjectName())) {
+            Optional<Signature> matchingWhiteListedFunction =
+                    getMatchingFunction(builtInTypeAndFunctionNamespaceManager.getFunctions(
+                            transactionHandle, QualifiedObjectName.valueOf(JAVA_BUILTIN_NAMESPACE, functionName.getObjectName())), parameterTypes, coercionAllowed);
+            if (matchingWhiteListedFunction.isPresent()) {
+                return builtInTypeAndFunctionNamespaceManager.getFunctionHandle(transactionHandle, matchingWhiteListedFunction.get());
+            }
+        }
+
+        // hack ends
+
         Optional<Signature> matchingDefaultFunctionSignature =
                 getMatchingFunction(functionNamespaceManager.getFunctions(transactionHandle, functionName), parameterTypes, coercionAllowed);
         Optional<Signature> matchingPluginFunctionSignature =
