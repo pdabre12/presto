@@ -29,6 +29,7 @@ import com.facebook.presto.tests.AbstractTestQueryFramework;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import io.airlift.tpch.TpchTable;
@@ -46,11 +47,14 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -62,15 +66,16 @@ public class TestFlightShimProducer
     private static final CallOption CALL_OPTIONS = CallOptions.timeout(300, TimeUnit.SECONDS);
     private static final JsonCodec<FlightShimRequest> REQUEST_JSON_CODEC = jsonCodec(FlightShimRequest.class);
     private static final JsonCodec<JdbcColumnHandle> COLUMN_HANDLE_JSON_CODEC = jsonCodec(JdbcColumnHandle.class);
+    private final List<AutoCloseable> closables  = new ArrayList<>();
     private final TestingPostgreSqlServer postgreSqlServer;
     private BufferAllocator allocator;
     private FlightServer server;
-    private FlightShimProducer producer;
 
     public TestFlightShimProducer()
             throws Exception
     {
         this.postgreSqlServer = new TestingPostgreSqlServer("testuser", "tpch");
+        closables.add(postgreSqlServer);
     }
 
     @BeforeClass
@@ -94,11 +99,13 @@ public class TestFlightShimProducer
         config.setArrowFlightServerSslEnabled(false);
 
         server = FlightShimServer.setupServer(FlightServer.builder(), injector).build();
+        closables.add(server);
         server.start();
 
         // Make sure these resources close properly
         allocator = injector.getInstance(BufferAllocator.class);
-        producer = injector.getInstance(FlightShimProducer.class);
+        closables.add(allocator);
+        closables.add(injector.getInstance(FlightShimProducer.class));
     }
 
     @Override
@@ -110,13 +117,11 @@ public class TestFlightShimProducer
 
     @AfterClass(alwaysRun = true)
     public void close()
-            throws InterruptedException, IOException
+            throws Exception
     {
-        if (server != null) {
-            server.close();
-            allocator.close();
+        for (AutoCloseable closeable : Lists.reverse(closables)) {
+            closeable.close();
         }
-        postgreSqlServer.close();
     }
 
     private int findUnusedPort()
@@ -194,7 +199,6 @@ public class TestFlightShimProducer
             }
         }
         catch (Exception e) {
-            int stop = 1;
             throw e;
         }
     }

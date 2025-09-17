@@ -75,61 +75,53 @@ public class FlightShimProducer
         try {
             FlightShimRequest request = REQUEST_JSON_CODEC.fromJson(ticket.getBytes());
 
-            //JsonCodec<com.facebook.presto.plugin.jdbc.JdbcSplit> codec = jsonCodec(com.facebook.presto.plugin.jdbc.JdbcSplit.class);
-            //com.facebook.presto.plugin.jdbc.JdbcSplit jdbcSplit = codec.fromJson(ticketString);
-
-            // TODO: need to be in ticket
-            //String pluginName = "jmx";
-            //String query = "SELECT * FROM java.lang:type=OperatingSystem";
-
             FlightShimPluginManager.ConnectorHolder connectorHolder = pluginManager.getConnector(request.getConnectorId());
-            if (connectorHolder != null) {
-                Connector connector = connectorHolder.getConnector();
-                ConnectorSplit split = connectorHolder.getCodecSplit().fromJson(request.getSplitBytes());
+            requireNonNull(connectorHolder, format("Requested connector not loaded: %s", request.getConnectorId()));
 
-                List<? extends ColumnHandle> columnHandles = request.getColumnHandlesBytes().stream().map(
-                        columnHandleBytes -> connectorHolder.getCodecColumnHandle().fromJson(columnHandleBytes)
-                ).collect(Collectors.toList());
+            Connector connector = connectorHolder.getConnector();
+            ConnectorSplit split = connectorHolder.getCodecSplit().fromJson(request.getSplitBytes());
 
-                List<ColumnMetadata> columnsMetadata = columnHandles.stream().map(
-                        columnHandle -> connectorHolder.getColumnMetadata(columnHandle)
-                ).collect(Collectors.toList());
+            List<? extends ColumnHandle> columnHandles = request.getColumnHandlesBytes().stream().map(
+                    columnHandleBytes -> connectorHolder.getCodecColumnHandle().fromJson(columnHandleBytes)
+            ).collect(Collectors.toList());
 
-                ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
+            List<ColumnMetadata> columnsMetadata = columnHandles.stream().map(
+                    columnHandle -> connectorHolder.getColumnMetadata(columnHandle)
+            ).collect(Collectors.toList());
 
-                //RecordPageSourceProvider connectorPageSourceProvider = new RecordPageSourceProvider(connectorRecordSetProvider);
-                //ConnectorPageSource source = connectorPageSourceProvider.createPageSource(transactionHandle, SESSION, jdbcSplit, ConnectorTableLayout, );
-                // Page page = source.getNextPage();
+            // TODO remove
+            String catalogName = request.getConnectorId();
+            String schemaName = "tpch";
+            ///////////////
 
-                // TODO remove
-                String catalogName = request.getConnectorId();
-                String schemaName = "tpch";
-                ///////////////
+            ConnectorTransactionHandle transactionHandle = connector.beginTransaction(IsolationLevel.READ_COMMITTED, true);
 
-                ConnectorTransactionHandle transactionHandle = connector.beginTransaction(IsolationLevel.READ_COMMITTED, true);
+            QueryIdGenerator queryIdGenerator = new QueryIdGenerator();
+            Session session = Session.builder(createTestingSessionPropertyManager())
+                    .setQueryId(queryIdGenerator.createNextQueryId())
+                    .setIdentity(new Identity("user", Optional.empty()))
+                    .setCatalog(catalogName)
+                    .setSchema(schemaName)
+                    .setTimeZoneKey(DEFAULT_TIME_ZONE_KEY)
+                    .setLocale(ENGLISH).build();
+            ConnectorId connectorId = new ConnectorId(catalogName);
+            ConnectorSession connectorSession = session.toConnectorSession(connectorId);
 
-                QueryIdGenerator queryIdGenerator = new QueryIdGenerator();
-                Session session = Session.builder(createTestingSessionPropertyManager())
-                        .setQueryId(queryIdGenerator.createNextQueryId())
-                        .setIdentity(new Identity("user", Optional.empty()))
-                        .setCatalog(catalogName)
-                        .setSchema(schemaName)
-                        .setTimeZoneKey(DEFAULT_TIME_ZONE_KEY)
-                        .setLocale(ENGLISH).build();
-                ConnectorId connectorId = new ConnectorId(catalogName);
-                ConnectorSession connectorSession = session.toConnectorSession(connectorId);
-                RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, split, columnHandles);
+            // TODO: try/catch unsupported op
+            ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
+            requireNonNull(connectorRecordSetProvider, format("Connector %s returned a null record set provider", request.getConnectorId()));
 
-                try (ArrowBatchSource batchSource = new ArrowBatchSource(allocator, columnsMetadata, recordSet.cursor())) {
-                    listener.setUseZeroCopy(true);
-                    listener.start(batchSource.getVectorSchemaRoot());
-                    while (batchSource.nextBatch()) {
-                        listener.putNext();
-                    }
+            //RecordPageSourceProvider connectorPageSourceProvider = new RecordPageSourceProvider(connectorRecordSetProvider);
+            //ConnectorPageSource source = connectorPageSourceProvider.createPageSource(transactionHandle, SESSION, jdbcSplit, ConnectorTableLayout, );
+            // Page page = source.getNextPage();
+            RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, split, columnHandles);
+
+            try (ArrowBatchSource batchSource = new ArrowBatchSource(allocator, columnsMetadata, recordSet.cursor())) {
+                listener.setUseZeroCopy(true);
+                listener.start(batchSource.getVectorSchemaRoot());
+                while (batchSource.nextBatch()) {
+                    listener.putNext();
                 }
-            }
-            else {
-                throw new PrestoException(GENERIC_INTERNAL_ERROR, "Requested connector not loaded: " + request.getConnectorId());
             }
         }
         catch (Exception e) {
@@ -139,7 +131,6 @@ public class FlightShimProducer
 
     @Override
     public void close()
-            throws IOException
     {
         pluginManager.stop();
         allocator.close();

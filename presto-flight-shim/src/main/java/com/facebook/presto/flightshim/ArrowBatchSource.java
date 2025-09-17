@@ -15,12 +15,15 @@ package com.facebook.presto.flightshim;
 
 import com.facebook.presto.common.type.BigintType;
 import com.facebook.presto.common.type.BooleanType;
+import com.facebook.presto.common.type.CharType;
+import com.facebook.presto.common.type.DecimalType;
 import com.facebook.presto.common.type.DoubleType;
 import com.facebook.presto.common.type.IntegerType;
 import com.facebook.presto.common.type.RealType;
 import com.facebook.presto.common.type.SmallintType;
 import com.facebook.presto.common.type.TinyintType;
 import com.facebook.presto.common.type.Type;
+import com.facebook.presto.common.type.VarbinaryType;
 import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.RecordCursor;
 import com.google.common.collect.ImmutableList;
@@ -28,6 +31,7 @@ import io.airlift.slice.Slice;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.AllocationHelper;
 import org.apache.arrow.vector.BaseFixedWidthVector;
+import org.apache.arrow.vector.BaseVariableWidthVector;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.DecimalVector;
@@ -35,9 +39,9 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.SmallIntVector;
+import org.apache.arrow.vector.TinyIntVector;
 import org.apache.arrow.vector.ValueVector;
-import org.apache.arrow.vector.VarBinaryVector;
-import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -47,13 +51,17 @@ import org.apache.arrow.vector.types.pojo.Schema;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Vector;
 import java.util.stream.Collectors;
 
+import static com.facebook.presto.common.type.Decimals.decodeUnscaledValue;
 import static com.facebook.presto.common.type.Varchars.isVarcharType;
+import static java.lang.Float.intBitsToFloat;
+import static java.lang.Math.toIntExact;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 
@@ -168,28 +176,38 @@ public class ArrowBatchSource
         if (type.equals(BooleanType.BOOLEAN)) {
             return ArrowType.Bool.INSTANCE;
         }
-        else if (type.equals(BigintType.BIGINT)) {
-            return new ArrowType.Int(64, true);
-        }
-        else if (type.equals(IntegerType.INTEGER)) {
-            return new ArrowType.Int(32, true);
+        else if (type.equals(TinyintType.TINYINT)) {
+            return new ArrowType.Int(8, true);
         }
         else if (type.equals(SmallintType.SMALLINT)) {
             return new ArrowType.Int(16, true);
         }
-        else if (type.equals(TinyintType.TINYINT)) {
-            return new ArrowType.Int(8, true);
+        else if (type.equals(IntegerType.INTEGER)) {
+            return new ArrowType.Int(32, true);
         }
-        else if (type.equals(DoubleType.DOUBLE)) {
-            return new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+        else if (type.equals(BigintType.BIGINT)) {
+            return new ArrowType.Int(64, true);
         }
         else if (type.equals(RealType.REAL)) {
             return new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE);
         }
+        else if (type.equals(DoubleType.DOUBLE)) {
+            return new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+        }
+        else if (type instanceof DecimalType) {
+            DecimalType decimalType = (DecimalType) type;
+            return new ArrowType.Decimal(decimalType.getPrecision(), decimalType.getScale(), 128);
+        }
+        else if (type.equals(VarbinaryType.VARBINARY)) {
+            return ArrowType.Binary.INSTANCE;
+        }
+        else if (type instanceof CharType) {
+            return ArrowType.Utf8.INSTANCE;
+        }
         else if (isVarcharType(type)) {
             return ArrowType.Utf8.INSTANCE;
         }
-
+        // TODO other types
         throw new IllegalArgumentException("unsupported type: " + type);
     }
 
@@ -204,23 +222,23 @@ public class ArrowBatchSource
         switch (vector.getMinorType()) {
         case BIT:
             return new ArrowShimBitWriter((BitVector) vector);
+        case TINYINT:
+            return new ArrowShimTinyIntWriter((TinyIntVector) vector);
+        case SMALLINT:
+            return new ArrowShimSmallIntWriter((SmallIntVector) vector);    
         case INT:
             return new ArrowShimIntWriter((IntVector) vector);
         case BIGINT:
             return new ArrowShimLongWriter((BigIntVector) vector);
         case FLOAT4:
-            return null;
-            //return new ArrowShimFloatWriter((Float4Vector) vector);
+            return new ArrowShimRealWriter((Float4Vector) vector);
         case FLOAT8:
             return new ArrowShimDoubleWriter((Float8Vector) vector);
         case DECIMAL:
-            return null;
-            //return new ArrowShimDecimalWriter((DecimalVector) vector);
+            return new ArrowShimDecimalWriter((DecimalVector) vector);
         case VARBINARY:
-            return null;
-            //return new ArrowShimVarBinaryWriter((VarBinaryVector) vector);
         case VARCHAR:
-            return new ArrowShimVarCharWriter((VarCharVector) vector);
+            return new ArrowShimVariableWidthWriter((BaseVariableWidthVector) vector);
         default:
             throw new UnsupportedOperationException("Unsupported Arrow type: " + vector.getMinorType().name());
         }
@@ -296,6 +314,50 @@ public class ArrowBatchSource
         }
     }
 
+    private static class ArrowShimTinyIntWriter extends ArrowFixedWidthShimWriter
+    {
+        private final TinyIntVector vector;
+
+        public ArrowShimTinyIntWriter(TinyIntVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public TinyIntVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            vector.set(index, (int) value);
+        }
+    }
+
+    private static class ArrowShimSmallIntWriter extends ArrowFixedWidthShimWriter
+    {
+        private final SmallIntVector vector;
+
+        public ArrowShimSmallIntWriter(SmallIntVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public SmallIntVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            vector.set(index, (int) value);
+        }
+    }
+
     private static class ArrowShimIntWriter extends ArrowFixedWidthShimWriter
     {
         private final IntVector vector;
@@ -340,6 +402,28 @@ public class ArrowBatchSource
         }
     }
 
+    private static class ArrowShimRealWriter extends ArrowFixedWidthShimWriter
+    {
+        private final Float4Vector vector;
+
+        public ArrowShimRealWriter(Float4Vector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public Float4Vector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            vector.set(index,  intBitsToFloat(toIntExact(value)));
+        }
+    }
+
     private static class ArrowShimDoubleWriter extends ArrowFixedWidthShimWriter
     {
         private final Float8Vector vector;
@@ -362,11 +446,46 @@ public class ArrowBatchSource
         }
     }
 
-    private static class ArrowShimVarCharWriter extends ArrowShimWriter
+    private static class ArrowShimDecimalWriter extends ArrowFixedWidthShimWriter
     {
-        private final VarCharVector vector;
+        private final DecimalVector vector;
 
-        public ArrowShimVarCharWriter(VarCharVector vector)
+        public ArrowShimDecimalWriter(DecimalVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public DecimalVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            // ShortDecimalType
+            BigInteger unscaledValue = BigInteger.valueOf(value);
+            BigDecimal bigDecimal = new BigDecimal(unscaledValue, vector.getScale(), new MathContext(vector.getPrecision()));
+            vector.set(index, bigDecimal);
+        }
+
+        @Override
+        public void writeSlice(int index, Slice value, int offset, int length)
+        {
+            // TODO should check offset is 0?
+            // LongDecimalType
+            BigInteger unscaledValue = decodeUnscaledValue(value);
+            BigDecimal bigDecimal = new BigDecimal(unscaledValue, vector.getScale(), new MathContext(vector.getPrecision()));
+            vector.set(index, bigDecimal);
+        }
+    }
+
+    private static class ArrowShimVariableWidthWriter extends ArrowShimWriter
+    {
+        private final BaseVariableWidthVector vector;
+
+        public ArrowShimVariableWidthWriter(BaseVariableWidthVector vector)
         {
             this.vector = vector;
         }
