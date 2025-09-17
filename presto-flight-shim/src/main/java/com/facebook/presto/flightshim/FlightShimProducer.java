@@ -16,7 +16,9 @@ package com.facebook.presto.flightshim;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.presto.Session;
 import com.facebook.presto.execution.QueryIdGenerator;
+import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
 import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorSplit;
@@ -28,6 +30,7 @@ import com.facebook.presto.spi.connector.ConnectorRecordSetProvider;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.facebook.presto.spi.security.Identity;
 import com.facebook.presto.spi.transaction.IsolationLevel;
+import com.facebook.presto.util.Reflection;
 import org.apache.arrow.flight.CallStatus;
 import org.apache.arrow.flight.NoOpFlightProducer;
 import org.apache.arrow.flight.Ticket;
@@ -39,6 +42,7 @@ import javax.inject.Inject;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -83,8 +87,12 @@ public class FlightShimProducer
                 Connector connector = connectorHolder.getConnector();
                 ConnectorSplit split = connectorHolder.getCodecSplit().fromJson(request.getSplitBytes());
 
-                List<? extends ColumnHandle> columnHandles =request.getColumnHandlesBytes().stream().map(
+                List<? extends ColumnHandle> columnHandles = request.getColumnHandlesBytes().stream().map(
                         columnHandleBytes -> connectorHolder.getCodecColumnHandle().fromJson(columnHandleBytes)
+                ).collect(Collectors.toList());
+
+                List<ColumnMetadata> columnsMetadata = columnHandles.stream().map(
+                        columnHandle -> connectorHolder.getColumnMetadata(columnHandle)
                 ).collect(Collectors.toList());
 
                 ConnectorRecordSetProvider connectorRecordSetProvider = connector.getRecordSetProvider();
@@ -112,7 +120,7 @@ public class FlightShimProducer
                 ConnectorSession connectorSession = session.toConnectorSession(connectorId);
                 RecordSet recordSet = connectorRecordSetProvider.getRecordSet(transactionHandle, connectorSession, split, columnHandles);
 
-                try (ArrowBatchSource batchSource = new ArrowBatchSource(allocator, recordSet.getColumnTypes(), recordSet.cursor())) {
+                try (ArrowBatchSource batchSource = new ArrowBatchSource(allocator, columnsMetadata, recordSet.cursor())) {
                     listener.setUseZeroCopy(true);
                     listener.start(batchSource.getVectorSchemaRoot());
                     while (batchSource.nextBatch()) {

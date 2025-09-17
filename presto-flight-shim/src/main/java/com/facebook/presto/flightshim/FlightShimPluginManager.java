@@ -40,6 +40,7 @@ import com.facebook.presto.server.PluginInstaller;
 import com.facebook.presto.server.PluginManagerConfig;
 import com.facebook.presto.server.PluginManagerUtil;
 import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorHandleResolver;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
@@ -50,6 +51,7 @@ import com.facebook.presto.spi.NodeManager;
 import com.facebook.presto.spi.PageIndexerFactory;
 import com.facebook.presto.spi.PageSorter;
 import com.facebook.presto.spi.Plugin;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.classloader.ThreadContextClassLoader;
 import com.facebook.presto.spi.connector.Connector;
 import com.facebook.presto.spi.connector.ConnectorContext;
@@ -71,6 +73,7 @@ import com.facebook.presto.sql.relational.FunctionResolution;
 import com.facebook.presto.sql.relational.RowExpressionDeterminismEvaluator;
 import com.facebook.presto.sql.relational.RowExpressionDomainTranslator;
 import com.facebook.presto.sql.relational.RowExpressionOptimizer;
+import com.facebook.presto.util.Reflection;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.FromStringDeserializer;
 import com.google.common.collect.ImmutableList;
@@ -82,6 +85,8 @@ import io.airlift.resolver.ArtifactResolver;
 import jakarta.annotation.PreDestroy;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,6 +98,7 @@ import static com.facebook.presto.common.type.IntegerType.INTEGER;
 import static com.facebook.presto.common.type.VarcharType.VARCHAR;
 import static com.facebook.presto.metadata.FunctionAndTypeManager.createTestFunctionAndTypeManager;
 import static com.facebook.presto.server.PluginManagerUtil.SPI_PACKAGES;
+import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.util.PropertiesUtil.loadProperties;
 import static com.google.api.client.util.Preconditions.checkState;
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -435,6 +441,7 @@ public class FlightShimPluginManager
         private final ConnectorHandleResolver resolver;
         private final JsonCodec<? extends ConnectorSplit> codecSplit;
         private final JsonCodec<? extends ColumnHandle> codecColumnHandle;
+        private final Method getColumnMetadataMethod;
 
         ConnectorHolder(Connector connector, ConnectorHandleResolver resolver)
         {
@@ -445,6 +452,19 @@ public class FlightShimPluginManager
             JsonObjectMapperProvider provider = new JsonObjectMapperProvider();
             provider.setJsonDeserializers(ImmutableMap.of(Type.class, new TestingTypeDeserializer()));
             this.codecColumnHandle = new JsonCodecFactory(provider).jsonCodec(resolver.getColumnHandleClass());
+            Method method;
+            try {
+                method = resolver.getColumnHandleClass().getMethod("getColumnMetadata");
+            }
+            catch (NoSuchMethodException e) {
+                try {
+                    method = resolver.getColumnHandleClass().getMethod("toColumnMetadata");
+                }
+                catch (NoSuchMethodException e2) {
+                    throw new PrestoException(GENERIC_INTERNAL_ERROR, "Unable to get column metadata from ColumnHandle", e);
+                }
+            }
+            this.getColumnMetadataMethod = method;
         }
 
         Connector getConnector()
@@ -460,6 +480,16 @@ public class FlightShimPluginManager
         JsonCodec<? extends ColumnHandle> getCodecColumnHandle()
         {
             return codecColumnHandle;
+        }
+
+        ColumnMetadata getColumnMetadata(ColumnHandle handle)
+        {
+            try {
+                return (ColumnMetadata) getColumnMetadataMethod.invoke(handle);
+            }
+            catch (InvocationTargetException | IllegalAccessException e) {
+                throw new PrestoException(GENERIC_INTERNAL_ERROR, "Unable to invoke method for getColumnMetadata", e);
+            }
         }
 
         ConnectorHandleResolver getResolver()

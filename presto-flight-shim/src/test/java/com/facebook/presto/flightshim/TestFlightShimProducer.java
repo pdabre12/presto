@@ -20,6 +20,7 @@ import com.facebook.airlift.testing.postgresql.TestingPostgreSqlServer;
 
 import com.facebook.presto.common.type.BigintType;
 import com.facebook.presto.common.type.IntegerType;
+import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
 import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.plugin.postgresql.PostgreSqlQueryRunner;
@@ -168,9 +169,9 @@ public class TestFlightShimProducer
             );
             JdbcColumnHandle columnHandle2 = new JdbcColumnHandle(
                     "postgresql",
-                    "originairportseqid",
-                    new JdbcTypeHandle(Types.INTEGER, "int", 4, 0),
-                    IntegerType.INTEGER,
+                    "tail_number",
+                    new JdbcTypeHandle(Types.VARCHAR, "varchar", 10, 0),
+                    VarcharType.VARCHAR,
                     false,
                     Optional.empty()
             );

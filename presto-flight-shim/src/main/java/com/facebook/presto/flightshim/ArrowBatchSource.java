@@ -13,61 +13,70 @@
  */
 package com.facebook.presto.flightshim;
 
+import com.facebook.presto.common.type.BigintType;
+import com.facebook.presto.common.type.BooleanType;
+import com.facebook.presto.common.type.DoubleType;
+import com.facebook.presto.common.type.IntegerType;
+import com.facebook.presto.common.type.RealType;
+import com.facebook.presto.common.type.SmallintType;
+import com.facebook.presto.common.type.TinyintType;
 import com.facebook.presto.common.type.Type;
+import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.RecordCursor;
+import com.google.common.collect.ImmutableList;
+import io.airlift.slice.Slice;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.AllocationHelper;
+import org.apache.arrow.vector.BaseFixedWidthVector;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.BitVector;
+import org.apache.arrow.vector.DecimalVector;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.Float4Vector;
+import org.apache.arrow.vector.Float8Vector;
+import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.ValueVector;
+import org.apache.arrow.vector.VarBinaryVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 import java.util.stream.Collectors;
 
+import static com.facebook.presto.common.type.Varchars.isVarcharType;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 
 public class ArrowBatchSource
         implements Closeable
 {
-    private final List<Type> types;
+    private final List<ColumnMetadata> columns;
     private final RecordCursor cursor;
     private final VectorSchemaRoot root;
+    private final List<ArrowShimWriter> writers;
     private boolean closed;
 
-    public ArrowBatchSource(BufferAllocator allocator, List<Type> types, RecordCursor cursor)
+    public ArrowBatchSource(BufferAllocator allocator, List<ColumnMetadata> columns, RecordCursor cursor)
     {
-        this.types = unmodifiableList(new ArrayList<>(requireNonNull(types, "types is null")));
+        this.columns = unmodifiableList(new ArrayList<>(requireNonNull(columns, "columns is null")));
         this.cursor = requireNonNull(cursor, "cursor is null");
-        this.root = createVectorSchemaRoot(allocator, types);
+        this.root = createVectorSchemaRoot(allocator, columns);
+        this.writers = createArrowWriters(root);
     }
 
     public VectorSchemaRoot getVectorSchemaRoot()
     {
-
-
-
-
-    }
-
-    private static VectorSchemaRoot createVectorSchemaRoot(BufferAllocator allocator, List<Type> types)
-    {
-        List<Field> fields = types.stream().map( type -> {
-            ArrowType arrowType = prestoToArrowType(type);
-            return new Field()
-        }).collect(Collectors.toList());
-        Schema schema = new Schema()
-
-        return VectorSchemaRoot.create(allocator, schema)
-    }
-
-    private static ArrowType prestoToArrowType(Type type)
-    {
-
+        return root;
     }
 
     /**
@@ -84,14 +93,55 @@ public class ArrowBatchSource
      */
     public boolean nextBatch()
     {
-        if (cursor.advanceNextPosition()) {
-            long result = cursor.getLong(0);
-            long result2 = cursor.getLong(1);
-            int blah = 0;
-            return true;
-        } else {
+        int maxRowCount = 1000;
+
+        if (closed) {
             return false;
         }
+
+        root.clear();
+        allocateVectorCapacity(root, maxRowCount);
+
+        int i;
+        for (i = 0; i < maxRowCount; ++i) {
+
+            if (!cursor.advanceNextPosition()) {
+                closed = true;
+                break;
+            }
+
+            for (int column = 0; column < writers.size(); column++) {
+                ArrowShimWriter writer = writers.get(column);
+                if (cursor.isNull(column)) {
+                    writer.writeNull(i);
+                } else {
+                    ColumnMetadata columnMetadata = columns.get(column);
+                    Type type = columnMetadata.getType();
+                    Class<?> javaType = type.getJavaType();
+                    if (javaType == boolean.class) {
+                        writer.writeBoolean(i, cursor.getBoolean(column));
+                    }
+                    else if (javaType == long.class) {
+                        writer.writeLong(i, cursor.getLong(column));
+                    }
+                    else if (javaType == double.class) {
+                        writer.writeDouble(i, cursor.getDouble(column));
+                    }
+                    else if (javaType == Slice.class) {
+                        Slice slice = cursor.getSlice(column);
+                        writer.writeSlice(i, slice, 0, slice.length());
+                    }
+                    else {
+                        throw new UnsupportedOperationException();
+                        //type.writeObject(output, cursor.getObject(column));
+                    }
+                }
+            }
+        }
+
+        root.setRowCount(i);
+
+        return i > 0;
     }
 
 
@@ -100,5 +150,237 @@ public class ArrowBatchSource
             throws IOException
     {
         cursor.close();
+    }
+
+    private static VectorSchemaRoot createVectorSchemaRoot(BufferAllocator allocator, List<ColumnMetadata> columns)
+    {
+        List<Field> fields = columns.stream().map( column -> {
+            ArrowType arrowType = prestoToArrowType(column.getType());
+            return new Field(column.getName(), new FieldType(column.isNullable(), arrowType, null), ImmutableList.of());
+        }).collect(Collectors.toList());
+        Schema schema = new Schema(fields);
+
+        return VectorSchemaRoot.create(schema, allocator);
+    }
+
+    private static ArrowType prestoToArrowType(Type type)
+    {
+        if (type.equals(BooleanType.BOOLEAN)) {
+            return ArrowType.Bool.INSTANCE;
+        }
+        else if (type.equals(BigintType.BIGINT)) {
+            return new ArrowType.Int(64, true);
+        }
+        else if (type.equals(IntegerType.INTEGER)) {
+            return new ArrowType.Int(32, true);
+        }
+        else if (type.equals(SmallintType.SMALLINT)) {
+            return new ArrowType.Int(16, true);
+        }
+        else if (type.equals(TinyintType.TINYINT)) {
+            return new ArrowType.Int(8, true);
+        }
+        else if (type.equals(DoubleType.DOUBLE)) {
+            return new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+        }
+        else if (type.equals(RealType.REAL)) {
+            return new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE);
+        }
+        else if (isVarcharType(type)) {
+            return ArrowType.Utf8.INSTANCE;
+        }
+
+        throw new IllegalArgumentException("unsupported type: " + type);
+    }
+
+    private static List<ArrowShimWriter> createArrowWriters(VectorSchemaRoot root)
+    {
+        final List<FieldVector> vectors = root.getFieldVectors();
+        return vectors.stream().map(ArrowBatchSource::createArrowWriter).collect(Collectors.toList());
+    }
+    
+    private static ArrowShimWriter createArrowWriter(FieldVector vector)
+    {
+        switch (vector.getMinorType()) {
+        case BIT:
+            return new ArrowShimBitWriter((BitVector) vector);
+        case INT:
+            return new ArrowShimIntWriter((IntVector) vector);
+        case BIGINT:
+            return new ArrowShimLongWriter((BigIntVector) vector);
+        case FLOAT4:
+            return null;
+            //return new ArrowShimFloatWriter((Float4Vector) vector);
+        case FLOAT8:
+            return new ArrowShimDoubleWriter((Float8Vector) vector);
+        case DECIMAL:
+            return null;
+            //return new ArrowShimDecimalWriter((DecimalVector) vector);
+        case VARBINARY:
+            return null;
+            //return new ArrowShimVarBinaryWriter((VarBinaryVector) vector);
+        case VARCHAR:
+            return new ArrowShimVarCharWriter((VarCharVector) vector);
+        default:
+            throw new UnsupportedOperationException("Unsupported Arrow type: " + vector.getMinorType().name());
+        }
+    }
+
+    private static void allocateVectorCapacity(VectorSchemaRoot root, int capacity)
+    {
+        for (ValueVector vector : root.getFieldVectors()) {
+            vector.setInitialCapacity(capacity);
+            AllocationHelper.allocateNew(vector, capacity);
+        }
+    }
+
+    private static abstract class ArrowShimWriter
+    {
+        public abstract void writeNull(int index);
+
+        public void writeBoolean(int index, boolean value)
+        {
+            throw new UnsupportedOperationException(getClass().getName());
+        }
+
+        public void writeLong(int index, long value)
+        {
+            throw new UnsupportedOperationException(getClass().getName());
+        }
+
+        public void writeDouble(int index, double value)
+        {
+            throw new UnsupportedOperationException(getClass().getName());
+        }
+
+        public void writeSlice(int index, Slice value, int offset, int length)
+        {
+            throw new UnsupportedOperationException(getClass().getName());
+        }
+
+        //public abstract void reset();
+        //vector.getValidityBuffer().setZero(0, vector.getValidityBuffer().capacity());
+        //    vector.setValueCount(0);
+    }
+
+    private static abstract class ArrowFixedWidthShimWriter extends ArrowShimWriter
+    {
+        public abstract BaseFixedWidthVector getVector();
+
+        @Override
+        public void writeNull(int index)
+        {
+            getVector().setNull(index);
+        }
+    }
+
+    private static class ArrowShimBitWriter extends ArrowFixedWidthShimWriter
+    {
+        private final BitVector vector;
+
+        public ArrowShimBitWriter(BitVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public BitVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeBoolean(int index, boolean value)
+        {
+            vector.set(index, value ? 1 : 0);
+        }
+    }
+
+    private static class ArrowShimIntWriter extends ArrowFixedWidthShimWriter
+    {
+        private final IntVector vector;
+
+        public ArrowShimIntWriter(IntVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public IntVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            vector.set(index, (int) value);
+        }
+    }
+
+    private static class ArrowShimLongWriter extends ArrowFixedWidthShimWriter
+    {
+        private final BigIntVector vector;
+
+        public ArrowShimLongWriter(BigIntVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public BigIntVector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeLong(int index, long value)
+        {
+            vector.set(index, value);
+        }
+    }
+
+    private static class ArrowShimDoubleWriter extends ArrowFixedWidthShimWriter
+    {
+        private final Float8Vector vector;
+
+        public ArrowShimDoubleWriter(Float8Vector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public Float8Vector getVector()
+        {
+            return vector;
+        }
+
+        @Override
+        public void writeDouble(int index, double value)
+        {
+            vector.set(index, value);
+        }
+    }
+
+    private static class ArrowShimVarCharWriter extends ArrowShimWriter
+    {
+        private final VarCharVector vector;
+
+        public ArrowShimVarCharWriter(VarCharVector vector)
+        {
+            this.vector = vector;
+        }
+
+        @Override
+        public void writeNull(int index)
+        {
+            vector.setNull(index);
+        }
+
+        @Override
+        public void writeSlice(int index, Slice value, int offset, int length)
+        {
+            vector.setSafe(index, value.getBytes(offset, length));
+        }
     }
 }
