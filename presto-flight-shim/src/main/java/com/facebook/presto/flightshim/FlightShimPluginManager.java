@@ -24,7 +24,6 @@ import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
-import com.facebook.presto.connector.ConnectorManager;
 import com.facebook.presto.cost.ConnectorFilterStatsCalculatorService;
 import com.facebook.presto.cost.FilterStatsCalculator;
 import com.facebook.presto.cost.ScalarStatsCalculator;
@@ -42,7 +41,6 @@ import com.facebook.presto.server.PluginManagerUtil;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorHandleResolver;
-import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorSystemConfig;
@@ -73,7 +71,6 @@ import com.facebook.presto.sql.relational.FunctionResolution;
 import com.facebook.presto.sql.relational.RowExpressionDeterminismEvaluator;
 import com.facebook.presto.sql.relational.RowExpressionDomainTranslator;
 import com.facebook.presto.sql.relational.RowExpressionOptimizer;
-import com.facebook.presto.util.Reflection;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.FromStringDeserializer;
 import com.google.common.collect.ImmutableList;
@@ -94,7 +91,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.facebook.presto.common.type.BigintType.BIGINT;
+import static com.facebook.presto.common.type.BooleanType.BOOLEAN;
+import static com.facebook.presto.common.type.DoubleType.DOUBLE;
 import static com.facebook.presto.common.type.IntegerType.INTEGER;
+import static com.facebook.presto.common.type.RealType.REAL;
+import static com.facebook.presto.common.type.SmallintType.SMALLINT;
+import static com.facebook.presto.common.type.TinyintType.TINYINT;
+import static com.facebook.presto.common.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.common.type.VarcharType.VARCHAR;
 import static com.facebook.presto.metadata.FunctionAndTypeManager.createTestFunctionAndTypeManager;
 import static com.facebook.presto.server.PluginManagerUtil.SPI_PACKAGES;
@@ -102,7 +105,6 @@ import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.util.PropertiesUtil.loadProperties;
 import static com.google.api.client.util.Preconditions.checkState;
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
@@ -131,7 +133,6 @@ public class FlightShimPluginManager
     {
         requireNonNull(pluginManagerConfig, "pluginManagerConfig is null");
         requireNonNull(catalogStoreConfig, "pluginManagerConfig is null");
-        //this.installedPluginsDir = Paths.get("/home/bryan/git/presto/presto-main/plugin").toFile();
         this.installedPluginsDir = pluginManagerConfig.getInstalledPluginsDir();
         if (pluginManagerConfig.getPlugins() == null) {
             this.plugins = ImmutableList.of();
@@ -231,7 +232,6 @@ public class FlightShimPluginManager
         checkState(connectorName != null, "Configuration for catalog %s does not contain connector.name", catalogName);
 
         catalogPropertiesMap.put(catalogName, new CatalogPropertiesHolder(connectorName, connectorProperties.build()));
-        //connectorManager.createConnection(catalogName, connectorName, connectorProperties.build());
 
         log.info("-- Added catalog %s using connector %s --", catalogName, connectorName);
     }
@@ -266,7 +266,7 @@ public class FlightShimPluginManager
         // Create connector instances from factories as needed
         return connectors.computeIfAbsent(catalogPropertiesHolder.getConnectorName(), name -> {
             ConnectorFactory factory = connectorFactories.get(name);
-            
+
             /*ConnectorContext context = new ConnectorContextInstance(
                 new ConnectorAwareNodeManager(nodeManager, nodeInfo.getEnvironment(), connectorId),
                 typeManager,
@@ -284,7 +284,8 @@ public class FlightShimPluginManager
                 blockEncodingSerde,
                 connectorSystemConfig);*/
 
-            FlightConnectorContext context = new FlightConnectorContext();
+            // TODO should context load a typemanager etc??
+            FlightShimConnectorContext context = new FlightShimConnectorContext();
 
             try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(factory.getClass().getClassLoader())) {
                 return new ConnectorHolder(factory.create(name, config, context), factory.getHandleResolver());
@@ -327,7 +328,7 @@ public class FlightShimPluginManager
         }
     }
 
-    private static class FlightConnectorContext
+    private static class FlightShimConnectorContext
             implements ConnectorContext
     {
         private final NodeManager nodeManager = new PluginNodeManager(new InMemoryNodeManager(), "flightconnector");
@@ -438,7 +439,6 @@ public class FlightShimPluginManager
     static class ConnectorHolder
     {
         private final Connector connector;
-        private final ConnectorHandleResolver resolver;
         private final JsonCodec<? extends ConnectorSplit> codecSplit;
         private final JsonCodec<? extends ColumnHandle> codecColumnHandle;
         private final Method getColumnMetadataMethod;
@@ -446,25 +446,13 @@ public class FlightShimPluginManager
         ConnectorHolder(Connector connector, ConnectorHandleResolver resolver)
         {
             this.connector = connector;
-            this.resolver = resolver;
             this.codecSplit = JsonCodec.jsonCodec(resolver.getSplitClass());
-            //this.codecColumnHandle = JsonCodec.jsonCodec(resolver.getColumnHandleClass());
+
+            // TODO better way to get a TypeDeserializer?
             JsonObjectMapperProvider provider = new JsonObjectMapperProvider();
-            provider.setJsonDeserializers(ImmutableMap.of(Type.class, new TestingTypeDeserializer()));
+            provider.setJsonDeserializers(ImmutableMap.of(Type.class, new FlightShimTypeDeserializer()));
             this.codecColumnHandle = new JsonCodecFactory(provider).jsonCodec(resolver.getColumnHandleClass());
-            Method method;
-            try {
-                method = resolver.getColumnHandleClass().getMethod("getColumnMetadata");
-            }
-            catch (NoSuchMethodException e) {
-                try {
-                    method = resolver.getColumnHandleClass().getMethod("toColumnMetadata");
-                }
-                catch (NoSuchMethodException e2) {
-                    throw new PrestoException(GENERIC_INTERNAL_ERROR, "Unable to get column metadata from ColumnHandle", e);
-                }
-            }
-            this.getColumnMetadataMethod = method;
+            this.getColumnMetadataMethod = reflectGetColumnMetadata(resolver);
         }
 
         Connector getConnector()
@@ -492,21 +480,36 @@ public class FlightShimPluginManager
             }
         }
 
-        ConnectorHandleResolver getResolver()
-        {
-            return resolver;
+        private static Method reflectGetColumnMetadata(ConnectorHandleResolver resolver) {
+            try {
+                return resolver.getColumnHandleClass().getMethod("getColumnMetadata");
+            }
+            catch (NoSuchMethodException e) {
+                try {
+                    return resolver.getColumnHandleClass().getMethod("toColumnMetadata");
+                }
+                catch (NoSuchMethodException e2) {
+                    throw new PrestoException(GENERIC_INTERNAL_ERROR, "Unable to get column metadata from ColumnHandle", e);
+                }
+            }
         }
     }
 
-    public static final class TestingTypeDeserializer
+    public static final class FlightShimTypeDeserializer
             extends FromStringDeserializer<Type>
     {
         private final Map<String, Type> types = ImmutableMap.of(
+                StandardTypes.BOOLEAN, BOOLEAN,
+                StandardTypes.TINYINT, TINYINT,
+                StandardTypes.SMALLINT, SMALLINT,
                 StandardTypes.INTEGER, INTEGER,
                 StandardTypes.BIGINT, BIGINT,
-                StandardTypes.VARCHAR, VARCHAR);
+                StandardTypes.REAL, REAL,
+                StandardTypes.DOUBLE, DOUBLE,
+                StandardTypes.VARCHAR, VARCHAR,
+                StandardTypes.VARBINARY, VARBINARY);
 
-        public TestingTypeDeserializer()
+        public FlightShimTypeDeserializer()
         {
             super(Type.class);
         }

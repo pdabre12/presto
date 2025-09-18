@@ -15,20 +15,24 @@ package com.facebook.presto.flightshim;
 
 import com.facebook.airlift.configuration.Config;
 import com.facebook.airlift.configuration.ConfigDescription;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 public class FlightShimConfig
 {
+    private static final int MAX_ROWS_PER_BATCH_DEFAULT = 10000;
     private String server;
     private String flightServerSSLCertificate;
     private boolean arrowFlightServerSslEnabled;
     private Integer arrowFlightPort;
+    private int maxRowsPerBatch = MAX_ROWS_PER_BATCH_DEFAULT;
 
     public String getFlightServerName()
     {
         return server;
     }
 
-    @Config("arrow-flight.server")
+    @Config("flight-shim.server")
     public FlightShimConfig setFlightServerName(String server)
     {
         this.server = server;
@@ -40,7 +44,7 @@ public class FlightShimConfig
         return arrowFlightPort;
     }
 
-    @Config("arrow-flight.server.port")
+    @Config("flight-shim.server.port")
     public FlightShimConfig setArrowFlightPort(Integer arrowFlightPort)
     {
         this.arrowFlightPort = arrowFlightPort;
@@ -52,7 +56,7 @@ public class FlightShimConfig
         return flightServerSSLCertificate;
     }
 
-    @Config("arrow-flight.server-ssl-certificate")
+    @Config("flight-shim.server-ssl-certificate")
     public FlightShimConfig setFlightServerSSLCertificate(String flightServerSSLCertificate)
     {
         this.flightServerSSLCertificate = flightServerSSLCertificate;
@@ -64,10 +68,25 @@ public class FlightShimConfig
         return arrowFlightServerSslEnabled;
     }
 
-    @Config("arrow-flight.server-ssl-enabled")
+    @Config("flight-shim.server-ssl-enabled")
     public FlightShimConfig setArrowFlightServerSslEnabled(boolean arrowFlightServerSslEnabled)
     {
         this.arrowFlightServerSslEnabled = arrowFlightServerSslEnabled;
+        return this;
+    }
+
+    public int getMaxRowsPerBatch()
+    {
+        return maxRowsPerBatch;
+    }
+
+    @Config("flight-shim.max-rows-per-batch")
+    @Min(1)
+    @Max(1000000)
+    @ConfigDescription("Sets the maximum number of rows an Arrow record batch will have before sending to the client")
+    public FlightShimConfig setMaxRowsPerBatch(int maxRowsPerBatch)
+    {
+        this.maxRowsPerBatch = maxRowsPerBatch;
         return this;
     }
 }

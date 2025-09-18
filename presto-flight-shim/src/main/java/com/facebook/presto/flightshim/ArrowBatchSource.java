@@ -50,7 +50,6 @@ import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
@@ -72,12 +71,14 @@ public class ArrowBatchSource
     private final RecordCursor cursor;
     private final VectorSchemaRoot root;
     private final List<ArrowShimWriter> writers;
+    private final int maxRowsPerBatch;
     private boolean closed;
 
-    public ArrowBatchSource(BufferAllocator allocator, List<ColumnMetadata> columns, RecordCursor cursor)
+    public ArrowBatchSource(BufferAllocator allocator, List<ColumnMetadata> columns, RecordCursor cursor, int maxRowsPerBatch)
     {
         this.columns = unmodifiableList(new ArrayList<>(requireNonNull(columns, "columns is null")));
         this.cursor = requireNonNull(cursor, "cursor is null");
+        this.maxRowsPerBatch = maxRowsPerBatch;
         this.root = createVectorSchemaRoot(allocator, columns);
         this.writers = createArrowWriters(root);
     }
@@ -88,30 +89,23 @@ public class ArrowBatchSource
     }
 
     /**
-     *
-     */
-    public boolean isFinished()
-    {
-        return closed;
-    }
-
-    /**
      * Loads the next record batch from the source.
      * Returns false if there are no more batches from the source.
      */
     public boolean nextBatch()
     {
-        int maxRowCount = 1000;
+        // Release previous buffers
+        root.clear();
 
         if (closed) {
             return false;
         }
 
-        root.clear();
-        allocateVectorCapacity(root, maxRowCount);
+        // Reserve capacity for next batch
+        allocateVectorCapacity(root, maxRowsPerBatch);
 
         int i;
-        for (i = 0; i < maxRowCount; ++i) {
+        for (i = 0; i < maxRowsPerBatch; ++i) {
 
             if (!cursor.advanceNextPosition()) {
                 closed = true;
@@ -140,23 +134,22 @@ public class ArrowBatchSource
                         writer.writeSlice(i, slice, 0, slice.length());
                     }
                     else {
+                        // TODO handle Object cursor.getObject(column)
                         throw new UnsupportedOperationException();
-                        //type.writeObject(output, cursor.getObject(column));
                     }
                 }
             }
         }
 
         root.setRowCount(i);
-
         return i > 0;
     }
 
 
     @Override
     public void close()
-            throws IOException
     {
+        root.close();
         cursor.close();
     }
 
@@ -275,10 +268,6 @@ public class ArrowBatchSource
         {
             throw new UnsupportedOperationException(getClass().getName());
         }
-
-        //public abstract void reset();
-        //vector.getValidityBuffer().setZero(0, vector.getValidityBuffer().capacity());
-        //    vector.setValueCount(0);
     }
 
     private static abstract class ArrowFixedWidthShimWriter extends ArrowShimWriter

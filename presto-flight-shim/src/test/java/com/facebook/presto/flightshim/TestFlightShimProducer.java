@@ -191,12 +191,18 @@ public class TestFlightShimProducer
 
             Ticket ticket = new Ticket(requestBytes);
 
+            int count = 0;
             try (FlightStream stream = client.getStream(ticket, CALL_OPTIONS)) {
                 while (stream.next()) {
                     VectorSchemaRoot root = stream.getRoot();
+                    count += root.getRowCount();
+                    if (count > 10000) {
+                        break;
+                    }
                     int stop = 10;
                 }
             }
+            int stop = 10;
         }
         catch (Exception e) {
             throw e;
