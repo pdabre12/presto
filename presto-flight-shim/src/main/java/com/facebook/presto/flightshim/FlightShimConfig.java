@@ -21,57 +21,57 @@ import jakarta.validation.constraints.Min;
 public class FlightShimConfig
 {
     private static final int MAX_ROWS_PER_BATCH_DEFAULT = 10000;
-    private String server;
-    private String flightServerSSLCertificate;
-    private boolean arrowFlightServerSslEnabled;
-    private Integer arrowFlightPort;
+    private String serverName;
+    private Integer serverPort;
+    private String serverSSLCertificate;
+    private boolean serverSslEnabled;
     private int maxRowsPerBatch = MAX_ROWS_PER_BATCH_DEFAULT;
 
-    public String getFlightServerName()
+    public String getServerName()
     {
-        return server;
+        return serverName;
     }
 
     @Config("flight-shim.server")
-    public FlightShimConfig setFlightServerName(String server)
+    public FlightShimConfig setServerName(String serverName)
     {
-        this.server = server;
+        this.serverName = serverName;
         return this;
     }
 
-    public Integer getArrowFlightPort()
+    public Integer getServerPort()
     {
-        return arrowFlightPort;
+        return serverPort;
     }
 
     @Config("flight-shim.server.port")
-    public FlightShimConfig setArrowFlightPort(Integer arrowFlightPort)
+    public FlightShimConfig setServerPort(Integer serverPort)
     {
-        this.arrowFlightPort = arrowFlightPort;
+        this.serverPort = serverPort;
         return this;
     }
 
-    public String getFlightServerSSLCertificate()
+    public String getServerSSLCertificate()
     {
-        return flightServerSSLCertificate;
+        return serverSSLCertificate;
     }
 
     @Config("flight-shim.server-ssl-certificate")
-    public FlightShimConfig setFlightServerSSLCertificate(String flightServerSSLCertificate)
+    public FlightShimConfig setServerSSLCertificate(String serverSSLCertificate)
     {
-        this.flightServerSSLCertificate = flightServerSSLCertificate;
+        this.serverSSLCertificate = serverSSLCertificate;
         return this;
     }
 
-    public boolean getArrowFlightServerSslEnabled()
+    public boolean getServerSslEnabled()
     {
-        return arrowFlightServerSslEnabled;
+        return serverSslEnabled;
     }
 
     @Config("flight-shim.server-ssl-enabled")
-    public FlightShimConfig setArrowFlightServerSslEnabled(boolean arrowFlightServerSslEnabled)
+    public FlightShimConfig setServerSslEnabled(boolean serverSslEnabled)
     {
-        this.arrowFlightServerSslEnabled = arrowFlightServerSslEnabled;
+        this.serverSslEnabled = serverSslEnabled;
         return this;
     }
 

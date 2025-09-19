@@ -19,8 +19,6 @@ import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.testing.postgresql.TestingPostgreSqlServer;
 
 import com.facebook.presto.common.type.BigintType;
-import com.facebook.presto.common.type.IntegerType;
-import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
 import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
 import com.facebook.presto.plugin.postgresql.PostgreSqlQueryRunner;
@@ -41,13 +39,11 @@ import org.apache.arrow.flight.FlightStream;
 import org.apache.arrow.flight.Location;
 import org.apache.arrow.flight.Ticket;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
@@ -82,11 +78,7 @@ public class TestFlightShimProducer
     public void setup()
             throws Exception
     {
-        Bootstrap app = new Bootstrap(ImmutableList.<Module>builder()
-                .add(new FlightShimModule())
-                .build());
-
-        Injector injector = app.initialize();
+        Injector injector = FlightShimServer.initialize();
 
         // TODO
         //Location location = Location.forGrpcTls("localhost", findUnusedPort());
@@ -94,13 +86,12 @@ public class TestFlightShimProducer
         //File certChainFile = new File("src/test/resources/server.crt");
         //File privateKeyFile = new File("src/test/resources/server.key");
         FlightShimConfig config = injector.getInstance(FlightShimConfig.class);
-        config.setFlightServerName("localhost");
-        config.setArrowFlightPort(findUnusedPort());
-        config.setArrowFlightServerSslEnabled(false);
+        config.setServerName("localhost");
+        config.setServerPort(findUnusedPort());
+        config.setServerSslEnabled(false);
 
-        server = FlightShimServer.setupServer(FlightServer.builder(), injector).build();
+        server = FlightShimServer.start(injector, FlightServer.builder());
         closables.add(server);
-        server.start();
 
         // Make sure these resources close properly
         allocator = injector.getInstance(BufferAllocator.class);
@@ -146,14 +137,6 @@ public class TestFlightShimProducer
                     "    \"columnDomains\" : [ ]\n" +
                     "  }\n" +
                     "}";
-            split = "{\n" +
-                    "  \"connectorId\" : \"postgresql\",\n" +
-                    "  \"schemaName\" : \"public\",\n" +
-                    "  \"tableName\" : \"airline\",\n" +
-                    "  \"tupleDomain\" : {\n" +
-                    "    \"columnDomains\" : [ ]\n" +
-                    "  }\n" +
-                    "}";
             byte[] splitBytes = split.getBytes(StandardCharsets.UTF_8);
 
             JdbcColumnHandle columnHandle = new JdbcColumnHandle(
@@ -164,29 +147,12 @@ public class TestFlightShimProducer
                     false,
                     Optional.empty()
             );
-            columnHandle = new JdbcColumnHandle(
-                    "postgresql",
-                    "year",
-                    new JdbcTypeHandle(Types.INTEGER, "int", 4, 0),
-                    IntegerType.INTEGER,
-                    false,
-                    Optional.empty()
-            );
-            JdbcColumnHandle columnHandle2 = new JdbcColumnHandle(
-                    "postgresql",
-                    "tail_number",
-                    new JdbcTypeHandle(Types.VARCHAR, "varchar", 10, 0),
-                    VarcharType.VARCHAR,
-                    false,
-                    Optional.empty()
-            );
             byte[] columnHandleBytes = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle);
-            byte[] columnHandleBytes2 = COLUMN_HANDLE_JSON_CODEC.toJsonBytes(columnHandle2);
 
             FlightShimRequest request = new FlightShimRequest(
                     "postgresql",
                     splitBytes,
-                    ImmutableList.of(columnHandleBytes, columnHandleBytes2));
+                    ImmutableList.of(columnHandleBytes));
             byte[] requestBytes = REQUEST_JSON_CODEC.toJsonBytes(request);
 
             Ticket ticket = new Ticket(requestBytes);
@@ -199,13 +165,8 @@ public class TestFlightShimProducer
                     if (count > 10000) {
                         break;
                     }
-                    int stop = 10;
                 }
             }
-            int stop = 10;
-        }
-        catch (Exception e) {
-            throw e;
         }
     }
 
