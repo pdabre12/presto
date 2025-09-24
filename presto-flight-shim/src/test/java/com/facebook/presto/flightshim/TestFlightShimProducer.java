@@ -37,7 +37,6 @@ import org.apache.arrow.flight.FlightStream;
 import org.apache.arrow.flight.Location;
 import org.apache.arrow.flight.Ticket;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -196,6 +195,7 @@ public class TestFlightShimProducer
                 }
             }
 
+            // TODO compare results against query
             assertGreaterThan(rowCount, 0);
         }
     }
