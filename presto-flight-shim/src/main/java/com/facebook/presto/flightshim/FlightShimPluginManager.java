@@ -24,6 +24,7 @@ import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.type.StandardTypes;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
+import com.facebook.presto.common.type.TypeSignature;
 import com.facebook.presto.cost.ConnectorFilterStatsCalculatorService;
 import com.facebook.presto.cost.FilterStatsCalculator;
 import com.facebook.presto.cost.ScalarStatsCalculator;
@@ -523,6 +524,7 @@ public class FlightShimPluginManager
         @Override
         protected Type _deserialize(String value, DeserializationContext context)
         {
+            TypeSignature.parseTypeSignature(value);
             Type type = types.get(value.toLowerCase(ENGLISH));
             //checkArgument(type != null, "Unknown type %s", value);
             // TODO: don't think this is used but..

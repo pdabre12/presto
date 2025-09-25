@@ -67,9 +67,9 @@ import static org.testng.AssertJUnit.assertNotNull;
 public class TestFlightShimProducer
         extends AbstractTestQueryFramework
 {
+    public static final JsonCodec<FlightShimRequest> REQUEST_JSON_CODEC = jsonCodec(FlightShimRequest.class);
+    public static final JsonCodec<JdbcColumnHandle> COLUMN_HANDLE_JSON_CODEC = jsonCodec(JdbcColumnHandle.class);
     private static final CallOption CALL_OPTIONS = CallOptions.timeout(300, TimeUnit.SECONDS);
-    private static final JsonCodec<FlightShimRequest> REQUEST_JSON_CODEC = jsonCodec(FlightShimRequest.class);
-    private static final JsonCodec<JdbcColumnHandle> COLUMN_HANDLE_JSON_CODEC = jsonCodec(JdbcColumnHandle.class);
     private final List<AutoCloseable> closables  = new ArrayList<>();
     private final TestingPostgreSqlServer postgreSqlServer;
     private BufferAllocator allocator;
@@ -136,7 +136,7 @@ public class TestFlightShimProducer
         }
     }
 
-    private static String createJdbcSplit(String connectorId, String schemaName, String tableName)
+    static String createJdbcSplit(String connectorId, String schemaName, String tableName)
     {
         return format("{\n" +
                 "  \"connectorId\" : \"%s\",\n" +
@@ -148,7 +148,7 @@ public class TestFlightShimProducer
                 "}", connectorId, schemaName, tableName);
     }
 
-    private static FlightShimRequest createTpchCustomerRequest()
+    static FlightShimRequest createTpchCustomerRequest()
     {
         String connectorId = "postgresql";
         String split = createJdbcSplit(connectorId, "tpch", "customer");
