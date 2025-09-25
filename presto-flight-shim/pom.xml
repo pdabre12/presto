@@ -174,12 +174,12 @@
             <artifactId>presto-base-jdbc</artifactId>
         </dependency>
 
-        <!-- for testing -->
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
-            <scope>test</scope>
         </dependency>
+
+        <!-- for testing -->
 
         <dependency>
             <groupId>org.jdbi</groupId>
