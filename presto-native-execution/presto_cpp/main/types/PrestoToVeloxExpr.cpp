@@ -450,6 +450,24 @@ TypedExprPtr VeloxExprConverter::toVeloxExpr(
     }
 
     auto returnType = typeParser_->parse(pexpr.returnType);
+    auto functionReturnType = typeParser_->parse(signature.returnType);
+    if (returnType->kind() == TypeKind::VARCHAR &&
+        functionReturnType->kind() == TypeKind::VARCHAR &&
+        !returnType->equivalent(*functionReturnType)) {
+      // It is possible that the expression return type does not match the
+      // function handle return type, for example, substr returns varchar(x) but
+      // expression return type is varchar. The function velox call typed
+      // expression needs to be created with the correct return type to enable
+      // proper function signature matching and compilation. It is then wrapped
+      // into a cast expression that returns the expected return type of the
+      // protocol call expression. This type of plan occurs with rewrites of the
+      // LIKE expression and doesn't normally occur with direct calls to the
+      // functions themselves. But it requires this kind of type coercion to
+      // make it work for Velox.
+      auto callExpr = std::make_shared<CallTypedExpr>(
+          functionReturnType, args, getFunctionName(signature));
+      return std::make_shared<CastTypedExpr>(returnType, callExpr, false);
+    }
     return std::make_shared<CallTypedExpr>(
         returnType, args, getFunctionName(signature));
 
