@@ -132,7 +132,7 @@ public class WorkerFunctionUtil
             }
 
             if (parameterTypeSignature.getParameters().isEmpty()) {
-                boolean changeTypeToVariable = isDecimalTypeBase(typeSignature.getBase());
+                boolean changeTypeToVariable = isDecimalTypeBase(typeSignature.getBase(), parameter);
                 if (changeTypeToVariable) {
                     newParameterTypeList.add(
                             TypeSignatureParameter.of(parameterTypeSignature.getBase()));
@@ -168,8 +168,11 @@ public class WorkerFunctionUtil
         return newParameterTypeList;
     }
 
-    private static boolean isDecimalTypeBase(String typeBase)
+    private static boolean isDecimalTypeBase(String typeBase, TypeSignatureParameter parameter)
     {
-        return typeBase.equals(StandardTypes.DECIMAL);
+        if (typeBase.equals(StandardTypes.VARCHAR)) {
+            int x = 10;
+        }
+        return (typeBase.equals(StandardTypes.DECIMAL)) || (typeBase.equals(StandardTypes.VARCHAR) && parameter.isTypeSignature());
     }
 }

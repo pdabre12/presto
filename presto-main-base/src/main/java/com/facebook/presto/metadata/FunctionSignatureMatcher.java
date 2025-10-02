@@ -33,6 +33,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.facebook.presto.common.type.AbstractVarcharType.UNBOUNDED_LENGTH;
+import static com.facebook.presto.common.type.StandardTypes.VARCHAR;
 import static com.facebook.presto.common.type.UnknownType.UNKNOWN;
 import static com.facebook.presto.metadata.BuiltInTypeAndFunctionNamespaceManager.JAVA_BUILTIN_NAMESPACE;
 import static com.facebook.presto.spi.StandardErrorCode.AMBIGUOUS_FUNCTION_CALL;
@@ -282,10 +284,34 @@ public final class FunctionSignatureMatcher
      */
     private boolean isMoreSpecificThan(ApplicableFunction left, ApplicableFunction right)
     {
+        if (isUnBoundedVarcharSignature(left) && isBoundedVarcharSignature(right)) {
+            return false;
+        }
+
+        if (isBoundedVarcharSignature(left) && isUnBoundedVarcharSignature(right)) {
+            return true;
+        }
+
         List<TypeSignatureProvider> resolvedTypes = fromTypeSignatures(left.getBoundSignature().getArgumentTypes());
         Optional<BoundVariables> boundVariables = new SignatureBinder(functionAndTypeManager, right.getDeclaredSignature(), true)
                 .bindVariables(resolvedTypes);
         return boundVariables.isPresent();
+    }
+
+    private boolean isBoundedVarcharSignature(ApplicableFunction function)
+    {
+        return function.getBoundSignature().getArgumentTypes().stream()
+                .anyMatch(sig -> sig.getBase().equals(VARCHAR)
+                        && sig.getParameters().size() == 1
+                        && sig.getParameters().get(0).getLongLiteral() != UNBOUNDED_LENGTH);
+    }
+
+    private boolean isUnBoundedVarcharSignature(ApplicableFunction function)
+    {
+        return function.getBoundSignature().getArgumentTypes().stream()
+                .anyMatch(sig -> sig.getBase().equals(VARCHAR)
+                        && sig.getParameters().size() == 1
+                        && sig.getParameters().get(0).getLongLiteral() == UNBOUNDED_LENGTH);
     }
 
     private Optional<List<Type>> toTypes(List<TypeSignatureProvider> typeSignatureProviders)

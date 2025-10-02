@@ -291,7 +291,6 @@ public class TestNativeSidecarQueriesOnSystemTables
         String tmpTableName1 = generateRandomTableName();
         ((QueryRunner) getExpectedQueryRunner()).execute(getSession(), String.format(commonSql, tmpTableName1));
 
-
         MaterializedResult r1 = computeActual(String.format("select * from %s", tmpTableName));
         MaterializedResult r2 = computeActual(String.format("select * from %s", tmpTableName1));
         assertEquals(r1.getMaterializedRows(), r2.getMaterializedRows());
