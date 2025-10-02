@@ -111,6 +111,16 @@ public class TestDataVerification
     }
 
     @Test
+    public void testSchemaMismatchForVarcharTypes()
+    {
+        Optional<VerifierQueryEvent> event = runVerification(
+                "SELECT cast('hello' as varchar) as col1",
+                "SELECT cast('hello' as varchar(5)) as col1");
+        assertTrue(event.isPresent());
+        assertEvent(event.get(), SUCCEEDED, Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    @Test
     public void testRowCountMismatch()
     {
         Optional<VerifierQueryEvent> event = runVerification(

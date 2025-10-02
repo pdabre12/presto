@@ -14,7 +14,9 @@
 package com.facebook.presto.verifier.framework;
 
 import com.facebook.airlift.log.Logger;
+import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
+import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.sql.tree.ShowColumns;
 import com.facebook.presto.sql.tree.Statement;
@@ -39,6 +41,7 @@ import static com.facebook.presto.verifier.framework.DataMatchResult.MatchType.S
 import static com.facebook.presto.verifier.framework.QueryStage.DESCRIBE;
 import static com.facebook.presto.verifier.framework.QueryStage.forTeardown;
 import static com.facebook.presto.verifier.framework.VerifierUtil.runAndConsume;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
@@ -80,7 +83,7 @@ public class DataVerificationUtil
             ChecksumResult testChecksum)
     {
         requireNonNull(controlColumns, "controlColumns is null.");
-        if (!controlColumns.equals(testColumns)) {
+        if (!normalizeColumns(controlColumns).equals(normalizeColumns(testColumns))) {
             return new DataMatchResult(
                     dataType,
                     SCHEMA_MISMATCH,
@@ -112,5 +115,27 @@ public class DataVerificationUtil
                 controlRowCount,
                 testRowCount,
                 mismatchedColumns);
+    }
+
+    private static List<Column> normalizeColumns(List<Column> columns)
+    {
+        return columns.stream()
+                .map(DataVerificationUtil::normalizeColumn)
+                .collect(toImmutableList());
+    }
+
+    private static Column normalizeColumn(Column column)
+    {
+        return Column.create(column.getName(), column.getExpression(), normalizeVarcharType(column.getType()));
+    }
+
+    private static Type normalizeVarcharType(Type type)
+    {
+        if (type instanceof VarcharType) {
+            if (!((VarcharType) type).isUnbounded()) {
+                return VarcharType.createUnboundedVarcharType();
+            }
+        }
+        return type;
     }
 }
