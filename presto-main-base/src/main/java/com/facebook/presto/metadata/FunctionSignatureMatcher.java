@@ -127,10 +127,10 @@ public final class FunctionSignatureMatcher
             return Optional.empty();
         }
 
-        if (coercionAllowed) {
-            applicableFunctions = selectMostSpecificFunctions(applicableFunctions, parameters);
-            checkState(!applicableFunctions.isEmpty(), "at least single function must be left");
-        }
+        // Because of varchar and varchar(N), we could have multiple applicable functions without coercionAllowed.
+
+        applicableFunctions = selectMostSpecificFunctions(applicableFunctions, parameters);
+        checkState(!applicableFunctions.isEmpty(), "at least single function must be left");
 
         if (applicableFunctions.size() == 1) {
             return Optional.of(getOnlyElement(applicableFunctions).getBoundSignature());
