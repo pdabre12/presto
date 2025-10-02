@@ -14,16 +14,23 @@
 package com.facebook.presto.sidecar;
 
 import com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils;
+import com.facebook.presto.testing.MaterializedResult;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.AbstractTestQueryFramework;
 import com.facebook.presto.tests.DistributedQueryRunner;
+import com.google.common.collect.ImmutableList;
+import org.intellij.lang.annotations.Language;
 import org.testng.annotations.Test;
 
+import java.util.UUID;
+
+import static com.facebook.presto.common.type.BigintType.BIGINT;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.createLineitem;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.createNation;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.createOrders;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.createOrdersEx;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.createRegion;
+import static com.facebook.presto.testing.assertions.Assert.assertEquals;
 
 public class TestNativeSidecarQueriesOnSystemTables
         extends AbstractTestQueryFramework
@@ -272,5 +279,40 @@ public class TestNativeSidecarQueriesOnSystemTables
                 "FROM information_schema.columns " +
                 "WHERE table_catalog = 'hive' AND table_name = 'region' " +
                 "ORDER BY pos");
+    }
+
+    @Test
+    public void testTables()
+    {
+        @Language("SQL") String commonSql = "CREATE TABLE %s( _col0) AS SELECT substr('w_warehouse_name', 1, 20)";
+        String tmpTableName = generateRandomTableName();
+        assertQuerySucceeds(String.format(commonSql, tmpTableName));
+
+        String tmpTableName1 = generateRandomTableName();
+        ((QueryRunner) getExpectedQueryRunner()).execute(getSession(), String.format(commonSql, tmpTableName1));
+
+
+        MaterializedResult r1 = computeActual(String.format("select * from %s", tmpTableName));
+        MaterializedResult r2 = computeActual(String.format("select * from %s", tmpTableName1));
+        assertEquals(r1.getMaterializedRows(), r2.getMaterializedRows());
+        assertEquals(r1.getTypes(), r2.getTypes()); // returns different types
+
+// java.lang.AssertionError: Lists differ at element [0]: varchar(16) != varchar
+        // Expected :varchar(16)
+        // Actual   :varchar
+    }
+
+    private String generateRandomTableName()
+    {
+        String tableName = "tmp_presto_" + UUID.randomUUID().toString().replace("-", "");
+        // Clean up if the temporary named table already exists.
+        dropTableIfExists(tableName);
+        return tableName;
+    }
+
+    private void dropTableIfExists(String tableName)
+    {
+        // An ugly workaround for the lack of getExpectedQueryRunner()
+        computeExpected(String.format("DROP TABLE IF EXISTS %s", tableName), ImmutableList.of(BIGINT));
     }
 }
