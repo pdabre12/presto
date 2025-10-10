@@ -622,6 +622,25 @@ public class TestNativeSidecarPlugin
                 ".*Scalar function name not registered: native.default.key_sampling_percent.*");
     }
 
+    @Test
+    public void testQueriesUsingBoundedVarchar()
+    {
+        @Language("SQL") String commonSql = "CREATE TABLE %s( _col0) AS SELECT substr('w_warehouse_name', 1, 20)";
+        String tmpTableName = generateRandomTableName();
+        assertQuerySucceeds(String.format(commonSql, tmpTableName));
+
+        String tmpTableName1 = generateRandomTableName();
+        ((QueryRunner) getExpectedQueryRunner()).execute(getSession(), String.format(commonSql, tmpTableName1));
+
+        MaterializedResult r1 = computeActual(String.format("select * from %s", tmpTableName));
+        MaterializedResult r2 = computeActual(String.format("select * from %s", tmpTableName1));
+        assertEquals(r1.getMaterializedRows(), r2.getMaterializedRows());
+        assertEquals(r1.getTypes(), r2.getTypes());
+
+        assertQuery("select concat(concat(name, ', '), comment) from customer");
+        assertQuery("select array[concat(concat('c_last_name', ', '), 'c_last_name'), comment] from customer");
+    }
+
     private String generateRandomTableName()
     {
         String tableName = "tmp_presto_" + UUID.randomUUID().toString().replace("-", "");
