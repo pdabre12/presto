@@ -31,14 +31,17 @@ public class SqlFunctionHandle
 {
     private final SqlFunctionId functionId;
     private final String version;
+    private final TypeSignature returnType;
 
     @JsonCreator
     public SqlFunctionHandle(
             @JsonProperty("functionId") SqlFunctionId functionId,
-            @JsonProperty("version") String version)
+            @JsonProperty("version") String version,
+            @JsonProperty("returnType") TypeSignature returnType)
     {
         this.functionId = requireNonNull(functionId, "functionId is null");
         this.version = version;
+        this.returnType = requireNonNull(returnType, "returnType is null");
     }
 
     @JsonProperty
@@ -51,6 +54,12 @@ public class SqlFunctionHandle
     public String getVersion()
     {
         return version;
+    }
+
+    @JsonProperty
+    public TypeSignature getReturnType()
+    {
+        return returnType;
     }
 
     @Override
@@ -88,19 +97,20 @@ public class SqlFunctionHandle
         }
         SqlFunctionHandle o = (SqlFunctionHandle) obj;
         return Objects.equals(functionId, o.functionId)
-                && Objects.equals(version, o.version);
+                && Objects.equals(version, o.version)
+                && Objects.equals(returnType, o.returnType);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(functionId, version);
+        return Objects.hash(functionId, version, returnType);
     }
 
     @Override
     public String toString()
     {
-        return String.format("%s:%s", functionId, version);
+        return String.format("%s:%s:%s", functionId, version, returnType);
     }
 
     public static class Resolver
