@@ -175,11 +175,11 @@ public class TestSqlInvokedFunctionNamespaceManager
         assertEquals(functionNamespaceManager.getUserDefinedType(QualifiedObjectName.valueOf("catalog.schema.type")), Optional.empty());
 
         // ErrorThrowingFunctionNamespaceManager throws a PrestoException that gets propagated
-        assertPrestoException(() -> functionNamespaceManager.getFunctionMetadata(new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "123")), GENERIC_USER_ERROR, "Error fetching function metadata");
+        assertPrestoException(() -> functionNamespaceManager.getFunctionMetadata(new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "123", FUNCTION_POWER_TOWER_DOUBLE.getSignature().getReturnType())), GENERIC_USER_ERROR, "Error fetching function metadata");
         assertPrestoException(() -> functionNamespaceManager.getFunctionHandle(Optional.empty(), FUNCTION_POWER_TOWER_DOUBLE.getSignature()), GENERIC_USER_ERROR, "Error fetching functions");
 
         // ErrorThrowingFunctionNamespaceManager throws an exception that is not a PrestoException. It gets wrapped in a PrestoException GENERIC_INTERNAL_ERROR
-        assertPrestoException(() -> functionNamespaceManager.getScalarFunctionImplementation(new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "123")), GENERIC_INTERNAL_ERROR, "Error getting ScalarFunctionImplementation for handle: unittest\\.memory\\.power_tower\\(double\\):123");
+        assertPrestoException(() -> functionNamespaceManager.getScalarFunctionImplementation(new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "123", FUNCTION_POWER_TOWER_DOUBLE.getSignature().getReturnType())), GENERIC_INTERNAL_ERROR, "Error getting ScalarFunctionImplementation for handle: unittest\\.memory\\.power_tower\\(double\\):123");
     }
 
     private static InMemoryFunctionNamespaceManager createFunctionNamespaceManager()

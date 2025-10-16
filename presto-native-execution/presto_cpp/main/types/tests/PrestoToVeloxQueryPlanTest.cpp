@@ -33,7 +33,8 @@ using namespace facebook::velox;
 namespace {
 void validateSqlFunctionHandleParsing(
     const std::shared_ptr<protocol::FunctionHandle>& functionHandle,
-    const std::vector<TypePtr>& expectedRawInputTypes) {
+    const std::vector<TypePtr>& expectedRawInputTypes,
+    const TypePtr& expectedReturnType) {
   std::vector<TypePtr> actualRawInputTypes;
   TypeParser typeParser;
   const auto sqlFunctionHandle =
@@ -43,6 +44,8 @@ void validateSqlFunctionHandleParsing(
   for (int i = 0; i < expectedRawInputTypes.size(); i++) {
     EXPECT_EQ(*expectedRawInputTypes[i], *actualRawInputTypes[i]);
   }
+  EXPECT_EQ(
+      expectedReturnType, typeParser.parse(sqlFunctionHandle->returnType));
 }
 } // namespace
 
@@ -63,14 +66,15 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithZeroParam) {
       {
         "@type": "sql_function_handle",
         "functionId": "json_file.test.count;",
-        "version": "1"
+        "version": "1",
+        "returnType": "bigint"
       }
     )";
 
   const json j = json::parse(str);
   const std::shared_ptr<protocol::FunctionHandle> functionHandle = j;
   ASSERT_NE(functionHandle, nullptr);
-  validateSqlFunctionHandleParsing(functionHandle, {});
+  validateSqlFunctionHandleParsing(functionHandle, {}, BIGINT());
 }
 
 TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithOneParam) {
@@ -78,7 +82,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithOneParam) {
           {
             "@type": "sql_function_handle",
             "functionId": "json_file.test.sum;tinyint",
-            "version": "1"
+            "version": "1",
+            "returnType": "double"
           }
     )";
 
@@ -87,7 +92,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithOneParam) {
   ASSERT_NE(functionHandle, nullptr);
 
   const std::vector<TypePtr> expectedRawInputTypes{TINYINT()};
-  validateSqlFunctionHandleParsing(functionHandle, expectedRawInputTypes);
+  validateSqlFunctionHandleParsing(
+      functionHandle, expectedRawInputTypes, DOUBLE());
 }
 
 TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithMultipleParam) {
@@ -95,7 +101,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithMultipleParam) {
         {
           "@type": "sql_function_handle",
           "functionId": "json_file.test.avg;array(decimal(15, 2));varchar",
-          "version": "1"
+          "version": "1",
+          "returnType": "varchar"
         }
     )";
 
@@ -105,7 +112,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleWithMultipleParam) {
 
   const std::vector<TypePtr> expectedRawInputTypes{
       ARRAY(DECIMAL(15, 2)), VARCHAR()};
-  validateSqlFunctionHandleParsing(functionHandle, expectedRawInputTypes);
+  validateSqlFunctionHandleParsing(
+      functionHandle, expectedRawInputTypes, VARCHAR());
 }
 
 TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleAllComplexTypes) {
@@ -113,7 +121,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleAllComplexTypes) {
         {
           "@type": "sql_function_handle",
           "functionId": "json_file.test.all_complex_types;row(map(hugeint, ipaddress), ipprefix);row(array(varbinary), timestamp, date, json, hyperloglog, timestamp with time zone, interval year to month, interval day to second);function(double, boolean);uuid",
-          "version": "1"
+          "version": "1",
+          "returnType": "varchar"
         }
     )";
 
@@ -134,7 +143,8 @@ TEST_F(PrestoToVeloxQueryPlanTest, parseSqlFunctionHandleAllComplexTypes) {
            INTERVAL_DAY_TIME()}),
       FUNCTION({DOUBLE()}, BOOLEAN()),
       UUID()};
-  validateSqlFunctionHandleParsing(functionHandle, expectedRawInputTypes);
+  validateSqlFunctionHandleParsing(
+      functionHandle, expectedRawInputTypes, VARCHAR());
 }
 
 TEST_F(PrestoToVeloxQueryPlanTest, parseIndexJoinNode) {
