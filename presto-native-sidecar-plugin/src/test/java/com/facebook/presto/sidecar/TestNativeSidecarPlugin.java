@@ -639,6 +639,10 @@ public class TestNativeSidecarPlugin
 
         assertQuery("select concat(concat(name, ', '), comment) from customer");
         assertQuery("select array[concat(concat('c_last_name', ', '), 'c_last_name'), comment] from customer");
+        assertQuery("SELECT CASE WHEN orderstatus = 'O' THEN 'a' ELSE 'b' END, count(*)\n" +
+                "FROM orders\n" +
+                "GROUP BY CASE WHEN orderstatus = 'O' THEN 'a' ELSE 'b' END");
+        assertQuery("SELECT json_extract_scalar(cast(x as json), '$[1]') FROM (SELECT '[' || array_join(array[nationkey, regionkey], ',') || ']' as x FROM nation)");
     }
 
     @Test
