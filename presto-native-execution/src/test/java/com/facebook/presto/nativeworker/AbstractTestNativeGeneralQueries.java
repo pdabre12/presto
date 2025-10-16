@@ -633,7 +633,9 @@ public abstract class AbstractTestNativeGeneralQueries
                 ")");
     }
 
-    @Test
+    // This test returns all nulls on Java, disabling this for now.
+    // Added this test in TestNativeSidecarPlugin with the native query runner.
+    @Test(enabled = false)
     public void testJsonExtract()
     {
         assertQuery("SELECT json_extract_scalar(cast(x as json), '$[1]') " +

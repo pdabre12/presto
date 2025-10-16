@@ -118,7 +118,8 @@ public class TestRowExpressionOptimizer
                     new SqlFunctionId(
                             QualifiedObjectName.valueOf(format("%s.cbrt", nativePrefix)),
                             ImmutableList.of(BIGINT.getTypeSignature())),
-                    "1"),
+                    "1",
+                    CPP_BAR.getSignature().getReturnType()),
             DOUBLE,
             ImmutableList.of(
                     constant(27L, BIGINT)));
@@ -129,7 +130,8 @@ public class TestRowExpressionOptimizer
                         new SqlFunctionId(
                                 QualifiedObjectName.valueOf(format("%s.sqrt", nativePrefix)),
                                 ImmutableList.of(BIGINT.getTypeSignature())),
-                        "1"),
+                        "1",
+                        CPP_FOO.getSignature().getReturnType()),
                 DOUBLE,
                 ImmutableList.of(
                         constant(64L, BIGINT)));
@@ -235,7 +237,8 @@ public class TestRowExpressionOptimizer
                         new SqlFunctionId(
                                 QualifiedObjectName.valueOf(format("%s.cpp_custom_func", nativePrefix)),
                                 ImmutableList.of(BIGINT.getTypeSignature())),
-                        "1"),
+                        "1",
+                        CPP_CUSTOM_FUNCTION.getSignature().getReturnType()),
                 BIGINT,
                 ImmutableList.of(constant(42L, BIGINT)));
 
@@ -256,7 +259,8 @@ public class TestRowExpressionOptimizer
                         new SqlFunctionId(
                                 QualifiedObjectName.valueOf(format("%s.cpp_custom_func", nativePrefix)),
                                 ImmutableList.of(BIGINT.getTypeSignature())),
-                        "1"),
+                        "1",
+                        CPP_CUSTOM_FUNCTION.getSignature().getReturnType()),
                 BIGINT,
                 ImmutableList.of(SQUARE_ROOT_EXP));
 
@@ -270,7 +274,8 @@ public class TestRowExpressionOptimizer
                                 new SqlFunctionId(
                                         QualifiedObjectName.valueOf(format("%s.cpp_custom_func", nativePrefix)),
                                         ImmutableList.of(BIGINT.getTypeSignature())),
-                                "1"),
+                                "1",
+                                CPP_CUSTOM_FUNCTION.getSignature().getReturnType()),
                         BIGINT,
                         ImmutableList.of(constant(8.0, DOUBLE))));
         assertInstanceOf(optimized, CallExpression.class);

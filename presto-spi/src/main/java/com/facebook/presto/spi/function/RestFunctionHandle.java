@@ -39,7 +39,7 @@ public class RestFunctionHandle
             @JsonProperty("signature") Signature signature,
             @JsonProperty("executionEndpoint") Optional<URI> executionEndpoint)
     {
-        super(functionId, version);
+        super(functionId, version, signature.getReturnType());
         this.signature = requireNonNull(signature, "signature is null");
         this.executionEndpoint = requireNonNull(executionEndpoint, "executionEndpoint is null");
         executionEndpoint.ifPresent(uri -> {

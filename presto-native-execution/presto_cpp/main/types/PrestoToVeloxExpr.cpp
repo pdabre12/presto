@@ -132,6 +132,78 @@ std::string getFunctionName(const protocol::SqlFunctionId& functionId) {
                                       : functionId;
 }
 
+struct BoundedAndUnboundedArgsScanResult {
+  bool hasBounded{false};
+  bool hasUnBounded{false};
+};
+
+void setBoundedUnBoundedFlags(
+    const velox::Type& type,
+    BoundedAndUnboundedArgsScanResult& result) {
+  if (velox::getVaryingLengthScalarTypeLength(type) >=
+      velox::kVaryingLengthScalarTypeUnboundedLength) {
+    result.hasUnBounded = true;
+  } else {
+    result.hasBounded = true;
+  }
+}
+
+void scanForBoundedAndUnboundedArgs(
+    const velox::TypePtr& type,
+    BoundedAndUnboundedArgsScanResult& result) {
+  if (type->kind() != TypeKind::VARCHAR) {
+    return;
+  }
+  const auto& v = type->as<TypeKind::VARCHAR>();
+  setBoundedUnBoundedFlags(v, result);
+}
+
+velox::TypePtr normalizeBoundedAndUnboundedArgs(const velox::TypePtr& type) {
+  if (type->kind() != TypeKind::VARCHAR) {
+    return type;
+  }
+  return velox::VARCHAR();
+}
+
+void normalizeMixedArgs(std::vector<TypedExprPtr>& args) {
+  BoundedAndUnboundedArgsScanResult scanResult;
+  for (auto& arg : args) {
+    scanForBoundedAndUnboundedArgs(arg->type(), scanResult);
+  }
+  if (scanResult.hasBounded && scanResult.hasUnBounded) {
+    for (auto& arg : args) {
+      auto normalizedType = normalizeBoundedAndUnboundedArgs(arg->type());
+      if (arg->type() != normalizedType) {
+        arg = std::make_shared<CastTypedExpr>(normalizedType, arg, false);
+      }
+    }
+  }
+}
+
+// It is possible that the expression return type does not match the
+// function handle return type, for example, substr returns varchar(x) but
+// expression return type is varchar. The function velox call typed
+// expression needs to be created with the correct return type to enable
+// proper function signature matching and compilation. It is then wrapped
+// into a cast expression that returns the expected return type of the
+// protocol call expression. This type of plan occurs with rewrites of the
+// LIKE expression and doesn't normally occur with direct calls to the
+// functions themselves. But it requires this kind of type coercion to
+// make it work for Velox.
+TypedExprPtr wrapExprInUnlimitedVarcharCast(
+    const velox::TypePtr& returnType,
+    const velox::TypePtr& functionReturnType,
+    const std::string& functionName,
+    std::vector<TypedExprPtr> args) {
+  if (returnType->kind() == TypeKind::VARCHAR &&
+      functionReturnType->kind() == TypeKind::VARCHAR &&
+      !returnType->equivalent(*functionReturnType)) {
+    auto callExpr =
+        std::make_shared<CallTypedExpr>(functionReturnType, args, functionName);
+    return std::make_shared<CastTypedExpr>(returnType, callExpr, false);
+  }
+  return std::make_shared<CallTypedExpr>(returnType, args, functionName);
+}
 } // namespace
 
 velox::variant VeloxExprConverter::getConstantValue(
@@ -449,36 +521,28 @@ TypedExprPtr VeloxExprConverter::toVeloxExpr(
       return literal.value();
     }
 
+    normalizeMixedArgs(args);
     auto returnType = typeParser_->parse(pexpr.returnType);
     auto functionReturnType = typeParser_->parse(signature.returnType);
-    if (returnType->kind() == TypeKind::VARCHAR &&
-        functionReturnType->kind() == TypeKind::VARCHAR &&
-        !returnType->equivalent(*functionReturnType)) {
-      // It is possible that the expression return type does not match the
-      // function handle return type, for example, substr returns varchar(x) but
-      // expression return type is varchar. The function velox call typed
-      // expression needs to be created with the correct return type to enable
-      // proper function signature matching and compilation. It is then wrapped
-      // into a cast expression that returns the expected return type of the
-      // protocol call expression. This type of plan occurs with rewrites of the
-      // LIKE expression and doesn't normally occur with direct calls to the
-      // functions themselves. But it requires this kind of type coercion to
-      // make it work for Velox.
-      auto callExpr = std::make_shared<CallTypedExpr>(
-          functionReturnType, args, getFunctionName(signature));
-      return std::make_shared<CastTypedExpr>(returnType, callExpr, false);
-    }
-    return std::make_shared<CallTypedExpr>(
-        returnType, args, getFunctionName(signature));
-
+    return wrapExprInUnlimitedVarcharCast(
+        returnType, functionReturnType, getFunctionName(signature), args);
   } else if (
       auto sqlFunctionHandle =
           std::dynamic_pointer_cast<protocol::SqlFunctionHandle>(
               pexpr.functionHandle)) {
     auto args = toVeloxExpr(pexpr.arguments);
+
+    // Normalize varchar arguments if there is a mix of bounded and unbounded
+    // varchar types. This is needed because Velox distinguishes between
+    // bounded and unbounded varchar types.
+    normalizeMixedArgs(args);
     auto returnType = typeParser_->parse(pexpr.returnType);
-    return std::make_shared<CallTypedExpr>(
-        returnType, args, getFunctionName(sqlFunctionHandle->functionId));
+    auto functionReturnType = typeParser_->parse(sqlFunctionHandle->returnType);
+    return wrapExprInUnlimitedVarcharCast(
+        returnType,
+        functionReturnType,
+        getFunctionName(sqlFunctionHandle->functionId),
+        args);
   }
 
   VELOX_FAIL("Unsupported function handle: {}", pexpr.functionHandle->_type);
