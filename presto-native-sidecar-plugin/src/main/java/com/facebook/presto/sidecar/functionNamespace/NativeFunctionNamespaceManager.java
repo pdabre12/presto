@@ -60,6 +60,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import static com.facebook.presto.builtin.tools.WorkerFunctionUtil.createSqlInvokedFunction;
+import static com.facebook.presto.builtin.tools.WorkerFunctionUtil.deDuplicateFunctions;
 import static com.facebook.presto.common.type.TypeSignatureUtils.resolveIntermediateType;
 import static com.facebook.presto.spi.StandardErrorCode.DUPLICATE_FUNCTION_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
@@ -128,7 +129,7 @@ public class NativeFunctionNamespaceManager
         Map<String, List<JsonBasedUdfFunctionMetadata>> udfSignatureMap = udfFunctionSignatureMap.getUDFSignatureMap();
         udfSignatureMap.forEach((name, metaInfoList) -> {
             List<SqlInvokedFunction> functions = metaInfoList.stream().map(metaInfo -> createSqlInvokedFunction(name, metaInfo, getCatalogName())).collect(toImmutableList());
-            functions.forEach(this::createFunction);
+            deDuplicateFunctions(functions).forEach(this::createFunction);
         });
     }
 

@@ -2255,6 +2255,7 @@ namespace facebook::presto::protocol {
 struct SqlFunctionHandle : public FunctionHandle {
   SqlFunctionId functionId = {};
   String version = {};
+  TypeSignature returnType = {};
 
   SqlFunctionHandle() noexcept;
 };

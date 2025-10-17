@@ -15,6 +15,8 @@ package com.facebook.presto.metadata;
 
 import com.facebook.presto.common.QualifiedObjectName;
 import com.facebook.presto.common.type.Type;
+import com.facebook.presto.common.type.TypeSignature;
+import com.facebook.presto.common.type.TypeSignatureParameter;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.function.FunctionKind;
 import com.facebook.presto.spi.function.Signature;
@@ -33,6 +35,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.facebook.presto.common.type.AbstractVarcharType.UNBOUNDED_LENGTH;
+import static com.facebook.presto.common.type.StandardTypes.CHAR;
 import static com.facebook.presto.common.type.UnknownType.UNKNOWN;
 import static com.facebook.presto.metadata.BuiltInTypeAndFunctionNamespaceManager.JAVA_BUILTIN_NAMESPACE;
 import static com.facebook.presto.spi.StandardErrorCode.AMBIGUOUS_FUNCTION_CALL;
@@ -282,10 +286,66 @@ public final class FunctionSignatureMatcher
      */
     private boolean isMoreSpecificThan(ApplicableFunction left, ApplicableFunction right)
     {
+        // If the parameterization scores match, default to the original function matching logic.
+        int leftParameterizationScore = countParameterizationScore(left);
+        int rightParameterizationScore = countParameterizationScore(right);
+
+        if (leftParameterizationScore > rightParameterizationScore) {
+            return true;
+        }
+
+        if (rightParameterizationScore > leftParameterizationScore) {
+            return false;
+        }
+
         List<TypeSignatureProvider> resolvedTypes = fromTypeSignatures(left.getBoundSignature().getArgumentTypes());
         Optional<BoundVariables> boundVariables = new SignatureBinder(functionAndTypeManager, right.getDeclaredSignature(), true)
                 .bindVariables(resolvedTypes);
         return boundVariables.isPresent();
+    }
+
+    // The scoring model is simple, we add 1 for every parameterized type present and 0 otherwise.
+    // While both int -> bigint and varchar(n) -> varchar widening is safe and won't break correctness,
+    // choosing the signatures with parameterized arg types makes more sense as they help preserve more type information.
+    // Note that we do not select the signature with the least casts.
+
+    // todo: confirm this
+    // We intentionally ignore `char(N)` parameters in the scoring.
+    // Unlike `varchar(N)`, parameterized char does not represent flexible type info and counting it towards
+    // a "better" isn't always correct. In ambiguous cases, if both `char` and `varchar` cases overloads exists,
+    // it's preferable to pick the `varchar` overload. Hence, we do not count char towards our score, if we do not
+    // have a varchar equivalent, we would just choose the best match using the fallback signature matching logic.
+    private static int countParameterizationScore(ApplicableFunction function)
+    {
+        int score = 0;
+        for (TypeSignature typeSignature : function.getBoundSignature().getArgumentTypes()) {
+            score += countParameterizationScore(typeSignature);
+        }
+        return score;
+    }
+
+    private static int countParameterizationScore(TypeSignature typeSignature)
+    {
+        int score = isParameterized(typeSignature) ? 1 : 0;
+
+        // Recurse into container types (array, map, row).
+        for (TypeSignatureParameter param : typeSignature.getParameters()) {
+            // Only recurse if param of kind TYPE or NAMED_TYPE
+            if (param.isTypeSignature() || param.isNamedTypeSignature()) {
+                score += countParameterizationScore(
+                        param.getTypeSignatureOrNamedTypeSignature().get());
+            }
+        }
+        return score;
+    }
+
+    // Consider parameterized if there's exactly 1 parameter of kind LONG and is not equal to UNBOUNDED_LENGTH.
+    private static boolean isParameterized(TypeSignature typeSignature)
+    {
+        return !typeSignature.getBase().equals(CHAR) &&
+                typeSignature.getParameters().size() == 1 &&
+                typeSignature.getParameters().get(0).isLongLiteral() &&
+                typeSignature.getParameters().get(0).getLongLiteral() != UNBOUNDED_LENGTH;
     }
 
     private Optional<List<Type>> toTypes(List<TypeSignatureProvider> typeSignatureProviders)

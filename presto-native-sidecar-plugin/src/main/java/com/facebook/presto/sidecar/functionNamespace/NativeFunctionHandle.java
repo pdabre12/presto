@@ -37,7 +37,7 @@ public class NativeFunctionHandle
     public NativeFunctionHandle(@JsonProperty("signature") Signature signature)
     {
         // Todo: hardcoding version as "1"
-        super(new SqlFunctionId(signature.getName(), signature.getArgumentTypes()), "1");
+        super(new SqlFunctionId(signature.getName(), signature.getArgumentTypes()), "1", signature.getReturnType());
         this.signature = requireNonNull(signature, "signature is null");
         checkArgument(signature.getTypeVariableConstraints().isEmpty(), "%s has unbound type parameters", signature);
     }

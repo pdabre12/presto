@@ -356,7 +356,7 @@ public class TestRestBasedFunctionNamespaceManager
         QualifiedObjectName functionName = QualifiedObjectName.valueOf("unittest.default.square");
         List<TypeSignature> argumentTypes = ImmutableList.of(parseTypeSignature("integer"));
         SqlFunctionId functionId = new SqlFunctionId(functionName, argumentTypes);
-        SqlFunctionHandle functionHandle = new SqlFunctionHandle(functionId, "1");
+        SqlFunctionHandle functionHandle = new SqlFunctionHandle(functionId, "1", parseTypeSignature("double"));
         ScalarFunctionImplementation implementation = functionNamespaceManager.getScalarFunctionImplementation(functionHandle);
         assertNotNull(implementation);
     }

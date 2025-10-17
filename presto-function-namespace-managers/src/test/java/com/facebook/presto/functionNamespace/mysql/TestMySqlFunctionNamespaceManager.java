@@ -412,7 +412,7 @@ public class TestMySqlFunctionNamespaceManager
     public void testInvalidFunctionHandle()
     {
         createFunction(FUNCTION_POWER_TOWER_DOUBLE, true);
-        SqlFunctionHandle functionHandle = new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "2");
+        SqlFunctionHandle functionHandle = new SqlFunctionHandle(FUNCTION_POWER_TOWER_DOUBLE.getFunctionId(), "2", FUNCTION_POWER_TOWER_DOUBLE.getSignature().getReturnType());
         functionNamespaceManager.getFunctionMetadata(functionHandle);
     }
 

@@ -140,7 +140,8 @@ public class SqlInvokedFunction
                         new SqlFunctionId(
                                 functionName,
                                 getArgumentTypes(parameters)),
-                        version.toString())) : Optional.empty());
+                        version.toString(),
+                        returnType)) : Optional.empty());
     }
 
     public SqlInvokedFunction(

@@ -98,7 +98,8 @@ TEST_F(CallExpressionTest, json_file) {
             "functionHandle": {
               "@type": "sql_function_handle",
               "functionId": "json.x4.sum;INTEGER;INTEGER",
-              "version": "1"
+              "version": "1",
+              "returnType": "double"
             },
             "returnType": "double"
           }

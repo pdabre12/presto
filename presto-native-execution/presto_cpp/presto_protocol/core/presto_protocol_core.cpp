@@ -9817,6 +9817,13 @@ void to_json(json& j, const SqlFunctionHandle& p) {
       "functionId");
   to_json_key(
       j, "version", p.version, "SqlFunctionHandle", "String", "version");
+  to_json_key(
+      j,
+      "returnType",
+      p.returnType,
+      "SqlFunctionHandle",
+      "TypeSignature",
+      "returnType");
 }
 
 void from_json(const json& j, SqlFunctionHandle& p) {
@@ -9830,6 +9837,13 @@ void from_json(const json& j, SqlFunctionHandle& p) {
       "functionId");
   from_json_key(
       j, "version", p.version, "SqlFunctionHandle", "String", "version");
+  from_json_key(
+      j,
+      "returnType",
+      p.returnType,
+      "SqlFunctionHandle",
+      "TypeSignature",
+      "returnType");
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
