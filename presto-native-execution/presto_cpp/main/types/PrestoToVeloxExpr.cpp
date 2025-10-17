@@ -480,9 +480,11 @@ std::optional<TypedExprPtr> VeloxExprConverter::tryConvertLike(
   }
 
   // Construct the returnType and CallTypedExpr for 'like'
+  normalizeMixedArgs(args);
   auto returnType = typeParser_->parse(pexpr.returnType);
-  return std::make_shared<CallTypedExpr>(
-      returnType, args, getFunctionName(signature));
+  auto functionReturnType = typeParser_->parse(signature.returnType);
+    return wrapExprInUnlimitedVarcharCast(
+        returnType, functionReturnType, getFunctionName(signature), args);
 }
 
 TypedExprPtr VeloxExprConverter::toVeloxExpr(
