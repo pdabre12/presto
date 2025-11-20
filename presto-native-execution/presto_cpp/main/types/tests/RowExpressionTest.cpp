@@ -55,55 +55,6 @@ class RowExpressionTest : public ::testing::Test {
     ASSERT_EQ(cexpr->value().toJson(cexpr->type()), value);
   }
 
-  std::string makeCastToVarchar(
-      bool isTryCast,
-      const std::string& inputType,
-      const std::string& returnType) {
-    std::string signatureNameField = isTryCast
-        ? R"("name": "presto.default.try_cast")"
-        : R"("name": "presto.default.$operator$cast")";
-    std::string inputTypeField = fmt::format("\"{}\"", inputType);
-    std::string returnTypeField =
-        fmt::format("\"returnType\": \"{}\"", returnType);
-
-    std::string result = R"##(
-      {
-        "@type": "call",
-        "arguments": [
-          {
-            "@type": "variable",
-            "name": "my_col",
-            "type": )##" +
-        inputTypeField + R"##(
-          }
-        ],
-        "displayName": "CAST",
-        "functionHandle": {
-          "@type": "$static",
-          "signature": {
-            "argumentTypes": [
-    )##" +
-        inputTypeField + R"##(
-            ],
-            "kind": "SCALAR",
-    )##" +
-        signatureNameField + R"##(,
-            "longVariableConstraints": [],
-    )##" +
-        returnTypeField + R"##(,
-            "typeVariableConstraints": [],
-            "variableArity": false
-          },
-          "builtInFunctionKind": "ENGINE"
-        },
-    )##" +
-        returnTypeField + R"##(
-      }
-    )##";
-
-    return result;
-  }
-
   std::shared_ptr<memory::MemoryPool> pool_;
   std::unique_ptr<VeloxExprConverter> converter_;
   TypeParser typeParser_;
@@ -337,7 +288,7 @@ TEST_F(RowExpressionTest, varchar1) {
             "type": "varchar(25)"
         }
     )##";
-  testConstantExpression(str, "VARCHAR", "\"23\"");
+  testConstantExpression(str, "VARCHAR(25)", "\"23\"");
 }
 
 TEST_F(RowExpressionTest, varchar2) {
@@ -542,7 +493,8 @@ TEST_F(RowExpressionTest, call) {
         "functionHandle": {
           "@type": "sql_function_handle",
           "functionId": "json.x4.eq;INTEGER;INTEGER",
-          "version": "1"
+          "version": "1",
+          "returnType": "boolean"
         },
         "returnType": "boolean"
       }
@@ -570,12 +522,12 @@ TEST_F(RowExpressionTest, call) {
     {
       auto cexpr =
           std::static_pointer_cast<const FieldAccessTypedExpr>(iexpr[0]);
-      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR");
+      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR(25)");
       ASSERT_EQ(cexpr->name(), "name");
     }
     {
       auto cexpr = std::static_pointer_cast<const ConstantTypedExpr>(iexpr[1]);
-      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR");
+      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR(25)");
       ASSERT_EQ(cexpr->value().toJson(cexpr->type()), "\"foo\"");
     }
   }
@@ -810,13 +762,13 @@ TEST_F(RowExpressionTest, special) {
     {
       auto cexpr = std::static_pointer_cast<const FieldAccessTypedExpr>(
           arg1expr->inputs()[0]);
-      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR");
+      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR(25)");
       ASSERT_EQ(cexpr->name(), "name");
     }
     {
       auto cexpr = std::static_pointer_cast<const ConstantTypedExpr>(
           arg1expr->inputs()[1]);
-      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR");
+      ASSERT_EQ(cexpr->type()->toString(), "VARCHAR(25)");
       ASSERT_EQ(cexpr->value().toJson(cexpr->type()), "\"foo\"");
     }
   }

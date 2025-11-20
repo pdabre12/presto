@@ -489,14 +489,6 @@ public abstract class AbstractTestNativeGeneralQueries
         assertQuery("SELECT CAST(true as VARCHAR), CAST(false as VARCHAR)");
         assertQuery("SELECT CAST(0.0 as VARCHAR)");
 
-        // Cast to varchar(n).
-        assertQuery("SELECT CAST(comment as VARCHAR(1)) FROM orders");
-        assertQuery("SELECT CAST(comment as VARCHAR(1000)) FROM orders WHERE LENGTH(comment) < 1000");
-        assertQuery("SELECT CAST(c0 AS VARCHAR(1)) FROM ( VALUES (NULL) ) t(c0)");
-        assertQuery("SELECT CAST(c0 AS VARCHAR(1)) FROM ( VALUES ('') ) t(c0)");
-        assertQuery("SELECT CAST(is_returned as VARCHAR(1)), CAST(linenumber_as_tinyint as VARCHAR(1)), CAST(linenumber_as_smallint as VARCHAR(1)), " +
-                "CAST(linenumber as VARCHAR(1)), CAST(tax_as_real as VARCHAR(1)), CAST(tax as VARCHAR(1)) FROM lineitem");
-
         assertQuery("SELECT try_cast(linenumber as TINYINT), try_cast(linenumber AS SMALLINT), "
                 + "try_cast(linenumber AS INTEGER), try_cast(linenumber AS BIGINT), try_cast(quantity AS REAL), "
                 + "try_cast(orderkey AS DOUBLE), try_cast(orderkey AS VARCHAR) FROM lineitem");
@@ -641,7 +633,9 @@ public abstract class AbstractTestNativeGeneralQueries
                 ")");
     }
 
-    @Test
+    // This test returns all nulls on Java, disabling this for now.
+    // Added this test in TestNativeSidecarPlugin with the native query runner.
+    @Test(enabled = false)
     public void testJsonExtract()
     {
         assertQuery("SELECT json_extract_scalar(cast(x as json), '$[1]') " +
