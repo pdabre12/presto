@@ -55,6 +55,55 @@ class RowExpressionTest : public ::testing::Test {
     ASSERT_EQ(cexpr->value().toJson(cexpr->type()), value);
   }
 
+  std::string makeCastToVarchar(
+      bool isTryCast,
+      const std::string& inputType,
+      const std::string& returnType) {
+    std::string signatureNameField = isTryCast
+        ? R"("name": "presto.default.try_cast")"
+        : R"("name": "presto.default.$operator$cast")";
+    std::string inputTypeField = fmt::format("\"{}\"", inputType);
+    std::string returnTypeField =
+        fmt::format("\"returnType\": \"{}\"", returnType);
+
+    std::string result = R"##(
+      {
+        "@type": "call",
+        "arguments": [
+          {
+            "@type": "variable",
+            "name": "my_col",
+            "type": )##" +
+        inputTypeField + R"##(
+          }
+        ],
+        "displayName": "CAST",
+        "functionHandle": {
+          "@type": "$static",
+          "signature": {
+            "argumentTypes": [
+    )##" +
+        inputTypeField + R"##(
+            ],
+            "kind": "SCALAR",
+    )##" +
+        signatureNameField + R"##(,
+            "longVariableConstraints": [],
+    )##" +
+        returnTypeField + R"##(,
+            "typeVariableConstraints": [],
+            "variableArity": false
+          },
+          "builtInFunctionKind": "ENGINE"
+        },
+    )##" +
+        returnTypeField + R"##(
+      }
+    )##";
+
+    return result;
+  }
+
   std::shared_ptr<memory::MemoryPool> pool_;
   std::unique_ptr<VeloxExprConverter> converter_;
   TypeParser typeParser_;
