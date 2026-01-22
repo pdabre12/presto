@@ -441,6 +441,7 @@ public class TestingPrestoServer
             clusterStateProvider = null;
             planCheckerProviderManager = injector.getInstance(PlanCheckerProviderManager.class);
             expressionManager.loadExpressionOptimizerFactories(authClientConfigs);
+            expressionManager.enableTestMode();
         }
         else if (resourceManager) {
             dispatchManager = null;
