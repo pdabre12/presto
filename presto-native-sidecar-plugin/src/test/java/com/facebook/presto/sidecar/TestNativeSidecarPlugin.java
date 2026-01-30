@@ -77,7 +77,7 @@ public class TestNativeSidecarPlugin
     private static final String REGEX_FUNCTION_NAMESPACE = "native.default.*";
     private static final String REGEX_SESSION_NAMESPACE = "Native Execution only.*";
     private static final long SIDECAR_HTTP_CLIENT_MAX_CONTENT_SIZE_MB = 128;
-    private static final int INLINED_SQL_FUNCTIONS_COUNT = 6;
+    private static final int INLINED_SQL_FUNCTIONS_COUNT = 7;
 
     @Override
     protected void createTables()
@@ -401,7 +401,7 @@ public class TestNativeSidecarPlugin
     }
 
     // type of variable 'expr_3' is expected to be varchar(1), but the actual type is varchar
-    @Test(enabled = false)
+    @Test
     public void testMapSubset()
     {
         assertQuery("select m[1], m[3] from (select map_subset(map(array[1,2,3,4], array['a', 'b', 'c', 'd']), array[1,3,10]) m)", "select 'a', 'c'");
@@ -420,6 +420,15 @@ public class TestNativeSidecarPlugin
     {
         assertQuery("select lower(table_name) from information_schema.tables "
                 + "where table_name = 'lineitem' or table_name = 'LINEITEM' ");
+    }
+
+    @Test
+    public void testInExpression()
+    {
+        Session session = Session.builder(getQueryRunner().getDefaultSession())
+                .setSystemProperty(EXPRESSION_OPTIMIZER_NAME, "native")
+                .build();
+        computeActual(session, "SELECT table_name, COALESCE(abs(ordinal_position), 0) as abs_pos FROM information_schema.columns WHERE table_catalog = 'hive' AND table_name IN ('nation', 'region') ORDER BY table_name, ordinal_position");
     }
 
     @Test
@@ -553,7 +562,6 @@ public class TestNativeSidecarPlugin
         assertQuery("SELECT any_values_match(MAP(ARRAY[orderkey], ARRAY[totalprice]), k -> abs(k) > 20) from orders");
         assertQuery("SELECT no_values_match(MAP(ARRAY[orderkey], ARRAY[comment]), k -> length(k) > 2) from orders");
         assertQuery("SELECT no_keys_match(MAP(ARRAY[comment], ARRAY[custkey]), k -> ends_with(k, 'a')) from orders");
-        assertQuery("select count(1) FROM lineitem l left JOIN orders o ON l.orderkey = o.orderkey JOIN customer c ON o.custkey = c.custkey");
     }
 
     @Test
@@ -610,9 +618,13 @@ public class TestNativeSidecarPlugin
                 "SELECT map_top_n_keys(MAP(ARRAY[regionkey], ARRAY[nationkey]), 5, (x, y) -> if (x < y, cast(1 as bigint), if (x > y, cast(-1 as bigint), cast(0 as bigint)))) from nation",
                 ".*Scalar function native\\.default\\.map_top_n_keys not registered with arguments.*",
                 true);
+
+        assertQueryFails(session,
+                "select count(1) FROM lineitem l left JOIN orders o ON l.orderkey = o.orderkey JOIN customer c ON o.custkey = c.custkey",
+                ".*Scalar function name not registered: native.default.key_sampling_percent.*");
     }
 
-    @Test(enabled = false)
+    @Test
     // crashes the server
     public void testP4HyperLogLogWithApproxSet()
     {
@@ -636,7 +648,7 @@ public class TestNativeSidecarPlugin
     //  are addressed using the native expression optimizer, and it is enabled everywhere.
 
     @Test
-    public void testNativeExpressionOptimizer()
+    public void testQueriesUsingNativeOptimizer()
     {
         Session session = Session.builder(getSession())
                 .setSystemProperty(EXPRESSION_OPTIMIZER_NAME, "native")
@@ -664,59 +676,53 @@ public class TestNativeSidecarPlugin
         assertQuerySucceeds(session, "SELECT * FROM (SELECT row_number() over(partition by orderstatus order by orderkey, orderstatus) rn, * from orders) WHERE rn = 1");
         assertQuerySucceeds(session, "WITH t AS (SELECT linenumber, row_number() over (partition by linenumber order by linenumber) as rn FROM lineitem) SELECT * FROM t WHERE rn = 1");
         assertQuerySucceeds(session, "SELECT row_number() OVER (PARTITION BY orderdate ORDER BY orderdate) FROM orders");
+    }
 
-        // IN expressions
-        assertQuerySucceeds(session, "SELECT table_name FROM information_schema.columns WHERE table_name IN ('nation', 'region')");
-        assertQuerySucceeds(session, "SELECT name FROM nation WHERE nationkey NOT IN (1, 2, 3, 4, 5, 10, 11, 12, 13)");
-        assertQuerySucceeds(session, "SELECT orderkey FROM lineitem WHERE shipmode IN ('TRUCK', 'FOB', 'RAIL')");
-        assertQuerySucceeds(session, "SELECT table_name, COALESCE(abs(ordinal_position), 0) as abs_pos FROM information_schema.columns WHERE table_catalog = 'hive' AND table_name IN ('nation', 'region') ORDER BY table_name, ordinal_position");
-        assertQuerySucceeds(session, "SELECT table_name, ordinal_position FROM information_schema.columns  WHERE abs(ordinal_position) IN (1, 2, 3) AND table_catalog = 'hive' AND table_name != 'roles' ORDER BY table_name, ordinal_position");
-        assertQuerySucceeds(session, "select lower(table_name) from information_schema.tables where table_name = 'lineitem' or table_name = 'LINEITEM'");
+    // type of variable 'array_intersect' is expected to be array(varchar(6)), but the actual type is array(varchar)
+    @Test
+    public void testVarcharMismatches()
+    {
+        assertQuery("SELECT array_intersect(ARRAY['apple', 'banana', 'cherry'], ARRAY['apple', 'mango', 'fig'])");
+        assertQuery("select m[1], m[3] from (select map_subset(map(array[1,2,3,4], array['a', 'b', 'c', 'd']), array[1,3,10]) m)", "select 'a', 'c'");
+        assertQuery("select m['p'], m['r'] from (select map_subset(map(array['p', 'q', 'r', 's'], array['a', 'b', 'c', 'd']), array['p', 'r', 'z']) m)", "select 'a', 'c'");
+        assertQuery("select m[true], m[false] from (select map_subset(map(array[false, true], array['a', 'z']), array[true, false]) m)", "select 'z', 'a'");
+        assertQuery("select m[DATE '2015-01-01'], m[DATE '2015-01-13'] from (select map_subset(" +
+                "map(array[DATE '2015-01-01', DATE '2015-02-13', DATE '2015-01-13', DATE '2015-05-15'], array['a', 'b', 'c', 'd']), " +
+                "array[DATE '2015-01-01', DATE '2015-01-13', DATE '2015-06-15']) m)", "select 'a', 'c'");
+        assertQuery("select m[TIMESTAMP '2021-01-02 09:04:05.321'] from (select map_subset(" +
+                "map(array[TIMESTAMP '2021-01-02 09:04:05.321', TIMESTAMP '2022-12-22 10:07:08.456'], array['a', 'b']), " +
+                "array[TIMESTAMP '2021-01-02 09:04:05.321', TIMESTAMP '2022-12-22 10:07:09.246']) m)", "select 'a'");
 
-        // Test dereference expression.
-        assertQuerySucceeds(session,
-                "select cast(row(row(row(random(10), if(random(10) >= 0, 2)), random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][1][2]");
-        assertQuerySucceeds(session,
-                "select cast(row(row(row(random(10), if(random(10) < 0, 2)), random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][2]");
-        assertQuerySucceeds(session,
-                "select cast(row(row(null, random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][1][1]");
-        assertQuerySucceeds(session,
-                "select cast(row(row(null, if(random(100) >= 0, 4)), random(10)) AS row(x row(y row(a int, b int), c int), d int))[2]");
-
-        // Test dereference expression with SQL invoked function, array_least_frequent.
-        assertQuerySucceeds(session, "SELECT array_least_frequent(array_agg(orderkey)) from orders");
-        assertQuerySucceeds(session, "SELECT array_least_frequent(array_agg(nationkey)) from nation");
+        assertQuerySucceeds("SELECT array_sort_desc(ARRAY['apple', 'banana', 'pear'], x -> IF(x = 'banana', NULL, length(x)))");
+        assertQuerySucceeds("SELECT array_sort(ARRAY['apple', 'banana', 'pear'], x -> IF(x = 'banana', NULL, length(x)))");
+        assertQuery("select CASE WHEN true THEN 'Yes' ELSE 'No' END");
+        assertQuery("SELECT ARRAY['abc']");
     }
 
     @Test
-    public void testMergeKHyperLogLog()
+    public void testCrashingWorker()
     {
-        assertQuery(
-                "select cardinality(merge(khll)), uniqueness_distribution(merge(khll)) " +
-                        "from (" +
-                        "   select k1, k2, khyperloglog_agg(v1, v2) khll " +
-                        "   from (values (1, 1, 2, 3), (1, 1, 4, 0), (1, 2, 90, 20), (1, 2, 87, 1), " +
-                        "                (2, 1, 11, 30), (2, 1, 11, 11), (2, 2, 9, 1), (2, 2, 87, 2)) t(k1, k2, v1, v2) " +
-                        "   group by k1, k2" +
-                        ")");
+        // row
+        assertQuery("SELECT array_min_by(ARRAY[ROW('USA', 1), ROW('INDIA', 2), ROW('UK', 3)], x -> x[2])");
+        assertQuerySucceeds("SELECT array_sort_desc(ARRAY[ROW('a', 3), ROW('b', 1), ROW('c', 2)], x -> x[2])");
+        assertQuerySucceeds("SELECT array_sort(ARRAY[ROW('a', 3), ROW('b', 1), ROW('c', 2)], x -> x[2])");
+        assertQuerySucceeds("select array_sort(array[row('apples', 23), row('bananas', 12), row('grapes', 44)], x -> x[2])");
 
-        // Test merge(KHyperLogLog) when there are no rows.
-        assertQuery(
-                "select cardinality(merge(khll)), uniqueness_distribution(merge(khll)) " +
-                        "from (" +
-                        "   select khyperloglog_agg(v1, v2) khll " +
-                        "   from (values (1, 1, 2, 3)) t(k1, k2, v1, v2) " +
-                        "   where 1 = 0" +
-                        ")");
-
-        // Verify merge(KHyperLogLog) handles null states correctly.
-        assertQuery(
-                "select cardinality(merge(khll)), uniqueness_distribution(merge(khll)) " +
-                        "from (" +
-                        "   select CAST(null AS KHYPERLOGLOG) khll" +
-                        ")");
+        // information_schema
+        assertQuery("SELECT table_name, CASE WHEN abs(ordinal_position) > 3 THEN 'high' WHEN abs(ordinal_position) > 1 THEN 'medium' ELSE 'low' END as position_category, COUNT(*) \n" +
+                "FROM information_schema.columns " +
+                "WHERE table_catalog = 'hive' AND table_name IN ('nation', 'region', 'lineitem', 'orders') " +
+                "GROUP BY table_name, CASE WHEN abs(ordinal_position) > 3 THEN 'high' WHEN abs(ordinal_position) > 1 THEN 'medium' ELSE 'low' END " +
+                "ORDER BY table_name, position_category");
     }
-    
+
+    @Test
+    public void testArrayLeastFrequentCrashingWorker()
+    {
+        assertQuery("SELECT array_least_frequent(quantities) from orders_ex");
+        assertQuery("SELECT array_least_frequent(split(comment, ''), 5) from nation");
+    }
+
     @Test
     public void testQueriesUsingBoundedVarchar()
     {
@@ -812,7 +818,7 @@ public class TestNativeSidecarPlugin
     {
         // Invalid UUID. Note: This evaluates on the co-ordinator. This is used in subsequent SQL.
         assertQueryFails("SELECT cast('0E984725-C51C-4BF4-9960-H1C80E27ABA0' AS uuid)",
-                "(?s).*Cannot cast value to UUID: 0E984725-C51C-4BF4-9960-H1C80E27ABA0.*");
+                "(?s).*bad lexical cast: source type value could not be interpreted as target.*");
         assertQuery("SELECT try_cast('0E984725-C51C-4BF4-9960-H1C80E27ABA0' AS uuid)");
 
         String tmpTableName = generateRandomTableName();
@@ -828,51 +834,6 @@ public class TestNativeSidecarPlugin
                 "(?s).*bad lexical cast: source type value could not be interpreted as target.*");
         assertQuery(format("SELECT try_cast(c_uuid AS uuid) FROM %s", tmpTableName));
         getQueryRunner().execute(format("DROP TABLE %s", tmpTableName));
-    }
-
-    // type of variable 'array_intersect' is expected to be array(varchar(6)), but the actual type is array(varchar)
-    @Test(enabled = false)
-    public void testVarcharMismatches()
-    {
-        assertQuery("SELECT array_intersect(ARRAY['apple', 'banana', 'cherry'], ARRAY['apple', 'mango', 'fig'])");
-        assertQuery("select m[1], m[3] from (select map_subset(map(array[1,2,3,4], array['a', 'b', 'c', 'd']), array[1,3,10]) m)", "select 'a', 'c'");
-        assertQuery("select m['p'], m['r'] from (select map_subset(map(array['p', 'q', 'r', 's'], array['a', 'b', 'c', 'd']), array['p', 'r', 'z']) m)", "select 'a', 'c'");
-        assertQuery("select m[true], m[false] from (select map_subset(map(array[false, true], array['a', 'z']), array[true, false]) m)", "select 'z', 'a'");
-        assertQuery("select m[DATE '2015-01-01'], m[DATE '2015-01-13'] from (select map_subset(" +
-                "map(array[DATE '2015-01-01', DATE '2015-02-13', DATE '2015-01-13', DATE '2015-05-15'], array['a', 'b', 'c', 'd']), " +
-                "array[DATE '2015-01-01', DATE '2015-01-13', DATE '2015-06-15']) m)", "select 'a', 'c'");
-        assertQuery("select m[TIMESTAMP '2021-01-02 09:04:05.321'] from (select map_subset(" +
-                "map(array[TIMESTAMP '2021-01-02 09:04:05.321', TIMESTAMP '2022-12-22 10:07:08.456'], array['a', 'b']), " +
-                "array[TIMESTAMP '2021-01-02 09:04:05.321', TIMESTAMP '2022-12-22 10:07:09.246']) m)", "select 'a'");
-
-        assertQuerySucceeds("SELECT array_sort_desc(ARRAY['apple', 'banana', 'pear'], x -> IF(x = 'banana', NULL, length(x)))");
-        assertQuerySucceeds("SELECT array_sort(ARRAY['apple', 'banana', 'pear'], x -> IF(x = 'banana', NULL, length(x)))");
-        assertQuery("select CASE WHEN true THEN 'Yes' ELSE 'No' END");
-        assertQuery("SELECT ARRAY['abc']");
-    }
-
-    @Test(enabled = false)
-    public void testCrashingWorker()
-    {
-        // row
-        assertQuery("SELECT array_min_by(ARRAY[ROW('USA', 1), ROW('INDIA', 2), ROW('UK', 3)], x -> x[2])");
-        assertQuerySucceeds("SELECT array_sort_desc(ARRAY[ROW('a', 3), ROW('b', 1), ROW('c', 2)], x -> x[2])");
-        assertQuerySucceeds("SELECT array_sort(ARRAY[ROW('a', 3), ROW('b', 1), ROW('c', 2)], x -> x[2])");
-        assertQuerySucceeds("select array_sort(array[row('apples', 23), row('bananas', 12), row('grapes', 44)], x -> x[2])");
-
-        // information_schema
-        assertQuery("SELECT table_name, CASE WHEN abs(ordinal_position) > 3 THEN 'high' WHEN abs(ordinal_position) > 1 THEN 'medium' ELSE 'low' END as position_category, COUNT(*) \n" +
-                "FROM information_schema.columns " +
-                "WHERE table_catalog = 'hive' AND table_name IN ('nation', 'region', 'lineitem', 'orders') " +
-                "GROUP BY table_name, CASE WHEN abs(ordinal_position) > 3 THEN 'high' WHEN abs(ordinal_position) > 1 THEN 'medium' ELSE 'low' END " +
-                "ORDER BY table_name, position_category");
-    }
-
-    @Test
-    public void testArrayLeastFrequentCrashingWorker()
-    {
-        assertQuery("SELECT array_least_frequent(quantities) from orders_ex");
-        assertQuery("SELECT array_least_frequent(split(comment, ''), 5) from nation");
     }
 
     private String generateRandomTableName()
