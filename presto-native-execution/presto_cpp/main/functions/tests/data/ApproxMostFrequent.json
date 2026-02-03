@@ -122,17 +122,17 @@
     },
     {
       "aggregateMetadata": {
-        "intermediateType": "row(bigint,bigint,array(varchar),array(bigint))",
+        "intermediateType": "row(bigint,bigint,array(varchar(i10)),array(bigint))",
         "isOrderSensitive": true
       },
       "docString": "presto.default.approx_most_frequent",
       "functionKind": "AGGREGATE",
       "isRpcFunction": false,
-      "longVariableConstraints": [],
-      "outputType": "map(varchar,bigint)",
+      "longVariableConstraints":[],
+      "outputType": "map(varchar(i10),bigint)",
       "paramTypes": [
         "bigint",
-        "varchar",
+        "varchar(i10)",
         "bigint"
       ],
       "routineCharacteristics": {
