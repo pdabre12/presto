@@ -2444,6 +2444,7 @@ struct ScalarArgumentSpecification : public ArgumentSpecification {
   String name = {};
   Type type = {};
   bool required = {};
+  String defaultValue = {};
 
   ScalarArgumentSpecification() noexcept;
 };
