@@ -706,6 +706,33 @@ public class TestNativeSidecarPlugin
         assertQuerySucceeds(session, "SELECT * FROM (SELECT row_number() over(partition by orderstatus order by orderkey, orderstatus) rn, * from orders) WHERE rn = 1");
         assertQuerySucceeds(session, "WITH t AS (SELECT linenumber, row_number() over (partition by linenumber order by linenumber) as rn FROM lineitem) SELECT * FROM t WHERE rn = 1");
         assertQuerySucceeds(session, "SELECT row_number() OVER (PARTITION BY orderdate ORDER BY orderdate) FROM orders");
+
+        // Test dereference expression.
+        assertQuerySucceeds(session,
+                "select cast(row(row(row(random(10), if(random(10) >= 0, 2)), random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][1][2]");
+        assertQuerySucceeds(session,
+                "select cast(row(row(row(random(10), if(random(10) < 0, 2)), random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][2]");
+        assertQuerySucceeds(session,
+                "select cast(row(row(null, random(10)), random(100)) AS row(x row(y row(a int, b int), c int), d int))[1][1][1]");
+        assertQuerySucceeds(session,
+                "select cast(row(row(null, if(random(100) >= 0, 4)), random(10)) AS row(x row(y row(a int, b int), c int), d int))[2]");
+
+        // Test dereference expression with SQL invoked function, array_least_frequent.
+        assertQuerySucceeds(session, "SELECT array_least_frequent(array_agg(orderkey)) from orders");
+        assertQuerySucceeds(session, "SELECT array_least_frequent(array_agg(nationkey)) from nation");
+
+        // Verify try(failing_function()) returns NULL.
+        assertQueryWithSameQueryRunner(session, "SELECT TRY(CAST(abs(-1234567890) AS TINYINT))", "SELECT NULL");
+        assertQueryWithSameQueryRunner(session, "SELECT COALESCE(TRY(CAST(abs(-1234567890) AS TINYINT)), 0)", "SELECT 0");
+        assertQueryWithSameQueryRunner(session, "SELECT TRY(fail(VARCHAR 'error message'))", "SELECT NULL");
+        assertQueryWithSameQueryRunner(session, "SELECT COALESCE(TRY(fail(VARCHAR 'error message')), 1)", "SELECT 1");
+        assertQueryWithSameQueryRunner(session, "SELECT TRY(CAST(TRY(fail(VARCHAR 'error message')) AS BIGINT))", "SELECT NULL");
+        assertQueryWithSameQueryRunner(session, "SELECT COALESCE(TRY(CAST(TRY(fail(VARCHAR 'error message')) AS INTEGER)), 2)", "SELECT 2");
+
+        // Test TRY expression.
+        assertQuerySucceeds(session, "SELECT TRY(CAST(orderkey AS TINYINT)) FROM orders");
+        assertQuerySucceeds(session, "SELECT TRY(CAST(comment AS BIGINT)) FROM orders");
+        assertQuerySucceeds(session, "SELECT TRY(CAST(orderkey AS DOUBLE)) FROM orders");
     }
 
     // type of variable 'array_intersect' is expected to be array(varchar(6)), but the actual type is array(varchar)
