@@ -1557,7 +1557,7 @@ void PrestoServer::registerFunctions() {
       prestoBuiltinFunctionPrefix_);
 #endif
 
-tvf::registerAllTableFunctions(prestoBuiltinFunctionPrefix_);
+  tvf::registerAllTableFunctions(prestoBuiltinFunctionPrefix_);
 }
 
 void PrestoServer::registerRemoteFunctions() {

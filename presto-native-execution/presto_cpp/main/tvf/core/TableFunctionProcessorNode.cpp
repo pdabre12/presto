@@ -174,13 +174,13 @@ folly::dynamic TableFunctionProcessorNode::serialize() const {
   obj["outputType"] = outputType_->serialize();
 
   obj["requiredColumns"] = ISerializable::serialize(requiredColumns_);
-  
+
   folly::dynamic markerChannelsArray = folly::dynamic::array;
   for (const auto& [key, value] : markerChannels_) {
     markerChannelsArray.push_back(folly::dynamic::array(key, value));
   }
   obj["markerChannels"] = markerChannelsArray;
-  
+
   obj["passThroughColumns"] = serializePassThroughColumns(passThroughColumns_);
 
   return obj;

@@ -140,8 +140,8 @@ class TableFunctionProcessorNode : public velox::core::PlanNode {
     return requiredColumns_;
   }
 
-  const std::vector<std::pair<velox::column_index_t, velox::column_index_t>>& markerChannels()
-      const {
+  const std::vector<std::pair<velox::column_index_t, velox::column_index_t>>&
+  markerChannels() const {
     return markerChannels_;
   }
 

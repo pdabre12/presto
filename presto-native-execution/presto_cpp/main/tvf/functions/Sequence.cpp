@@ -129,7 +129,7 @@ class Sequence : public TableFunctionSplitProcessor {
       : TableFunctionSplitProcessor("sequence", pool, nullptr),
         step_(handle->step()) {}
 
-static std::unique_ptr<TableFunctionAnalysis> analyze(
+  static std::unique_ptr<TableFunctionAnalysis> analyze(
       const std::unordered_map<std::string, std::shared_ptr<Argument>>& args) {
     VELOX_CHECK_GT(args.count(START_ARGUMENT_NAME), 0, "START arg not found");
     VELOX_CHECK_GT(args.count(STOP_ARGUMENT_NAME), 0, "STOP arg not found");
@@ -138,7 +138,8 @@ static std::unique_ptr<TableFunctionAnalysis> analyze(
     VELOX_CHECK(startArg, "START arg is NULL");
     auto startPtr = std::dynamic_pointer_cast<ScalarArgument>(startArg);
     VELOX_CHECK(startPtr, "START arg is not a scalar");
-    auto startVector = startPtr->value()->template as<ConstantVector<int64_t>>();
+    auto startVector =
+        startPtr->value()->template as<ConstantVector<int64_t>>();
     VELOX_USER_CHECK(!startVector->isNullAt(0), "Start is null");
     auto startVal = startVector->valueAt(0);
 
@@ -179,7 +180,6 @@ static std::unique_ptr<TableFunctionAnalysis> analyze(
     analysis->tableFunctionHandle_ = handle;
     return analysis;
   }
-
 
   std::shared_ptr<TableFunctionResult> apply(
       const std::shared_ptr<const TableSplitHandle>& split) override {
@@ -246,12 +246,15 @@ static std::unique_ptr<TableFunctionAnalysis> analyze(
 
 void registerSequence(const std::string& name) {
   TableArgumentSpecList argSpecs;
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      START_ARGUMENT_NAME, BIGINT(), false, "0"));
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      STOP_ARGUMENT_NAME, BIGINT(), true));
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      STEP_ARGUMENT_NAME, BIGINT(), false, "1"));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>(
+          START_ARGUMENT_NAME, BIGINT(), false, "0"));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>(
+          STOP_ARGUMENT_NAME, BIGINT(), true));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>(
+          STEP_ARGUMENT_NAME, BIGINT(), false, "1"));
 
   std::vector<std::string> names = {"sequential_number"};
   std::vector<TypePtr> types = {BIGINT()};

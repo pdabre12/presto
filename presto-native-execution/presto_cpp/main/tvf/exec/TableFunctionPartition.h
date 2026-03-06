@@ -39,7 +39,8 @@ class TableFunctionPartition {
       const std::vector<velox::column_index_t>& inputMapping,
       const std::vector<velox::RowTypePtr>& requiredColumnTypes,
       const std::vector<std::vector<velox::column_index_t>>& requiredColumns,
-      const std::vector<std::pair<velox::column_index_t, velox::column_index_t>>&
+      const std::vector<
+          std::pair<velox::column_index_t, velox::column_index_t>>&
           markerChannels,
       const std::vector<
           TableFunctionProcessorNode::PassThroughColumnSpecification>&

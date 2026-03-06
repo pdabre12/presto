@@ -1903,8 +1903,10 @@ VeloxQueryPlanConverterBase::toVeloxQueryPlan(
     const std::shared_ptr<const protocol::TableFunctionProcessorNode>& node,
     const std::shared_ptr<protocol::TableWriteInfo>& tableWriteInfo,
     const protocol::TaskId& taskId) {
-  // Build complete output variable list including proper outputs and pass through columns.
-  std::vector<protocol::VariableReferenceExpression> allOutputs = node->properOutputs;
+  // Build complete output variable list including proper outputs and pass
+  // through columns.
+  std::vector<protocol::VariableReferenceExpression> allOutputs =
+      node->properOutputs;
   for (const auto& spec : node->passThroughSpecifications) {
     for (const auto& col : spec.columns) {
       allOutputs.push_back(col.outputVariables);
@@ -1960,9 +1962,9 @@ VeloxQueryPlanConverterBase::toVeloxQueryPlan(
       markerChannels;
   if (node->markerVariables && inputType) {
     for (const auto& [markerVariable, channel] : *node->markerVariables) {
-      markerChannels.push_back({
-          inputType->getChildIdx(markerVariable.name),
-          inputType->getChildIdx(channel.name)});
+      markerChannels.push_back(
+          {inputType->getChildIdx(markerVariable.name),
+           inputType->getChildIdx(channel.name)});
     }
   }
 
@@ -1972,14 +1974,16 @@ VeloxQueryPlanConverterBase::toVeloxQueryPlan(
   for (const auto& specification : node->passThroughSpecifications) {
     auto indexChannel = specification.declaredAsPassThrough ? channel++ : -1;
     for (const auto& column : specification.columns) {
-      // For pass-through columns, the output variable name matches the input variable name
-      // So we can look up both in their respective types
-      auto outputColumnIndex = outputType->getChildIdx(column.outputVariables.name);
-      auto inputColumnIndex = inputType ? inputType->getChildIdx(column.outputVariables.name) : -1;
-      
+      // For pass-through columns, the output variable name matches the input
+      // variable name So we can look up both in their respective types
+      auto outputColumnIndex =
+          outputType->getChildIdx(column.outputVariables.name);
+      auto inputColumnIndex =
+          inputType ? inputType->getChildIdx(column.outputVariables.name) : -1;
+
       passThroughColumnSpecifications.emplace_back(
           column.partitioningColumn,
-          inputColumnIndex,  // Use INPUT column index, not output
+          inputColumnIndex, // Use INPUT column index, not output
           outputColumnIndex, // Add output column index as new parameter
           indexChannel);
     }

@@ -59,13 +59,17 @@ class TableFunctionOperator : public velox::exec::Operator {
     if (!noMoreInput_ || validFunctionInput_) {
       return false;
     }
-    
-    bool allRowsProcessed = (numRows_ > 0) ? (numProcessedRows_ >= numRows_) : true;
-    bool emptyPruned = (numRows_ == 0) && tableFunctionProcessorNode_->pruneWhenEmpty();
+
+    bool allRowsProcessed =
+        (numRows_ > 0) ? (numProcessedRows_ >= numRows_) : true;
+    bool emptyPruned =
+        (numRows_ == 0) && tableFunctionProcessorNode_->pruneWhenEmpty();
     bool emptyPartitionDone = (numRows_ == 0) && finishedEmptyPartition_;
-    bool multipleInputsDone = (requiredColumnTypes_.size() <= 1) || calledWithNullptr_;
-    
-    return emptyPruned || emptyPartitionDone || (allRowsProcessed && multipleInputsDone);
+    bool multipleInputsDone =
+        (requiredColumnTypes_.size() <= 1) || calledWithNullptr_;
+
+    return emptyPruned || emptyPartitionDone ||
+        (allRowsProcessed && multipleInputsDone);
   }
 
   void reclaim(
@@ -118,10 +122,11 @@ class TableFunctionOperator : public velox::exec::Operator {
   velox::vector_size_t numProcessedRows_ = 0;
   // Number of input rows of the current partition processed so far.
   velox::vector_size_t numPartitionProcessedRows_ = 0;
-  
-  // Flag to track if we've called the function with nullptr to signal end-of-stream
+
+  // Flag to track if we've called the function with nullptr to signal
+  // end-of-stream
   bool calledWithNullptr_ = false;
-  
+
   // Flag to track if we've finished processing the empty partition
   bool finishedEmptyPartition_ = false;
 
