@@ -277,7 +277,7 @@ JavaClasses:
   - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/GroupIdNode.java
   - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/RowNumberNode.java
   - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/SampleNode.java
-  - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/TopNRowNumberNode.java
+  - presto-spi/src/main/java/com/facebook/presto/spi/plan/TopNRowNumberNode.java
   - presto-main-base/src/main/java/com/facebook/presto/metadata/TableFunctionHandle.java
   - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/TableFunctionNode.java
   - presto-main-base/src/main/java/com/facebook/presto/sql/planner/plan/TableFunctionProcessorNode.java

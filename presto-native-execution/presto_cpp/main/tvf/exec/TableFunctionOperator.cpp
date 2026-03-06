@@ -17,6 +17,7 @@
 #include "presto_cpp/main/tvf/exec/TableFunctionPartition.h"
 
 #include "velox/common/memory/MemoryArbitrator.h"
+#include "velox/exec/OperatorType.h"
 #include "velox/vector/ComplexVector.h"
 
 namespace facebook::presto::tvf {
@@ -56,7 +57,8 @@ TableFunctionOperator::TableFunctionOperator(
           tableFunctionProcessorNode->id(),
           "TableFunctionOperator",
           tableFunctionProcessorNode->canSpill(driverCtx->queryConfig())
-              ? driverCtx->makeSpillConfig(operatorId)
+              // check the operator type here
+              ? driverCtx->makeSpillConfig(operatorId, OperatorType::kRowNumber)
               : std::nullopt),
       pool_(pool()),
       stringAllocator_(pool_),
@@ -113,11 +115,15 @@ RowVectorPtr TableFunctionOperator::getOutputFromFunction() {
   VELOX_CHECK(dataProcessor_);
 
   if (!validFunctionInput_) {
-    bool allRowsProcessed = (tableFunctionPartition_->numRows() - numPartitionProcessedRows_) == 0;
+    bool allRowsProcessed =
+        (tableFunctionPartition_->numRows() - numPartitionProcessedRows_) == 0;
     bool hasMultipleInputs = requiredColumnTypes_.size() > 1;
-    bool shouldTryAssemble = !allRowsProcessed || (allRowsProcessed && numPartitionProcessedRows_ == 0 && hasMultipleInputs);
-    
-    if (allRowsProcessed && numPartitionProcessedRows_ > 0 && !calledWithNullptr_ && hasMultipleInputs) {
+    bool shouldTryAssemble = !allRowsProcessed ||
+        (allRowsProcessed && numPartitionProcessedRows_ == 0 &&
+         hasMultipleInputs);
+
+    if (allRowsProcessed && numPartitionProcessedRows_ > 0 &&
+        !calledWithNullptr_ && hasMultipleInputs) {
       functionInput_.clear();
       for (size_t i = 0; i < requiredColumnTypes_.size(); i++) {
         functionInput_.push_back(nullptr);
@@ -133,9 +139,10 @@ RowVectorPtr TableFunctionOperator::getOutputFromFunction() {
   }
 
   auto result = dataProcessor_->apply(functionInput_);
-  
+
   if (result->state() == TableFunctionResult::TableFunctionState::kFinished) {
-    numProcessedRows_ += (tableFunctionPartition_->numRows() - numPartitionProcessedRows_);
+    numProcessedRows_ +=
+        (tableFunctionPartition_->numRows() - numPartitionProcessedRows_);
     tableFunctionPartition_ = nullptr;
     numPartitionProcessedRows_ = 0;
     validFunctionInput_ = false;
@@ -153,7 +160,7 @@ RowVectorPtr TableFunctionOperator::getOutputFromFunction() {
   VELOX_CHECK(
       result->state() == TableFunctionResult::TableFunctionState::kProcessed);
   auto resultRows = result->result();
-  
+
   if (result->usedInput()) {
     velox::vector_size_t totalInputRows = 0;
     for (const auto& input : functionInput_) {
@@ -170,8 +177,10 @@ RowVectorPtr TableFunctionOperator::getOutputFromFunction() {
     return nullptr;
   }
 
-  auto finalResult = tableFunctionPartition_->appendPassThroughColumns(resultRows);
-  return (finalResult && finalResult->size() > 0) ? std::move(finalResult) : nullptr;
+  auto finalResult =
+      tableFunctionPartition_->appendPassThroughColumns(resultRows);
+  return (finalResult && finalResult->size() > 0) ? std::move(finalResult)
+                                                  : nullptr;
 }
 
 RowVectorPtr TableFunctionOperator::getOutput() {
@@ -194,13 +203,15 @@ RowVectorPtr TableFunctionOperator::getOutput() {
     // Only multiple inputs need the nullptr call
     bool hasMultipleInputs = requiredColumnTypes_.size() > 1;
     // IMPORTANT: Don't consider partition done if validFunctionInput_ is true
-    // This means the function has output to produce but hasn't consumed the input yet
-    return hasPartition && allRowsProcessed && (!hasMultipleInputs || calledWithNullptr_) && !validFunctionInput_;
+    // This means the function has output to produce but hasn't consumed the
+    // input yet
+    return hasPartition && allRowsProcessed &&
+        (!hasMultipleInputs || calledWithNullptr_) && !validFunctionInput_;
   };
 
   if (numRows_ == 0) {
     bool hasMultipleInputs = requiredColumnTypes_.size() > 1;
-    
+
     if (!hasMultipleInputs && tableFunctionProcessorNode_->pruneWhenEmpty()) {
       return nullptr;
     }

@@ -1950,15 +1950,6 @@ void to_json(json& j, const MergeTarget& p);
 void from_json(const json& j, MergeTarget& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-<<<<<<< HEAD
-struct NativeFunctionHandle : public FunctionHandle {
-  Signature signature = {};
-
-  NativeFunctionHandle() noexcept;
-};
-void to_json(json& j, const NativeFunctionHandle& p);
-void from_json(const json& j, NativeFunctionHandle& p);
-=======
 struct NativeField {
   std::shared_ptr<String> name = {};
   std::shared_ptr<TypeSignature> typeSignature = {};
@@ -1972,7 +1963,15 @@ struct NativeDescriptor {
 };
 void to_json(json& j, const NativeDescriptor& p);
 void from_json(const json& j, NativeDescriptor& p);
->>>>>>> 3662b23fa09 (feat(native): Add TVF plugin to load native tvfs)
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+struct NativeFunctionHandle : public FunctionHandle {
+  Signature signature = {};
+
+  NativeFunctionHandle() noexcept;
+};
+void to_json(json& j, const NativeFunctionHandle& p);
+void from_json(const json& j, NativeFunctionHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
 struct NativeSidecarFailureInfo {

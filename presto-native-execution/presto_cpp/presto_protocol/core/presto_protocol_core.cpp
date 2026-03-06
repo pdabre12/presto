@@ -8065,34 +8065,6 @@ void from_json(const json& j, MergeTarget& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-NativeFunctionHandle::NativeFunctionHandle() noexcept {
-  _type = "native";
-}
-
-void to_json(json& j, const NativeFunctionHandle& p) {
-  j = json::object();
-  j["@type"] = "native";
-  to_json_key(
-      j,
-      "signature",
-      p.signature,
-      "NativeFunctionHandle",
-      "Signature",
-      "signature");
-}
-
-void from_json(const json& j, NativeFunctionHandle& p) {
-  p._type = j["@type"];
-  from_json_key(
-      j,
-      "signature",
-      p.signature,
-      "NativeFunctionHandle",
-      "Signature",
-      "signature");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
 
 void to_json(json& j, const NativeField& p) {
   j = json::object();
@@ -8128,6 +8100,34 @@ void to_json(json& j, const NativeDescriptor& p) {
 void from_json(const json& j, NativeDescriptor& p) {
   from_json_key(
       j, "fields", p.fields, "NativeDescriptor", "List<NativeField>", "fields");
+}
+} // namespace facebook::presto::protocol
+namespace facebook::presto::protocol {
+NativeFunctionHandle::NativeFunctionHandle() noexcept {
+  _type = "native";
+}
+
+void to_json(json& j, const NativeFunctionHandle& p) {
+  j = json::object();
+  j["@type"] = "native";
+  to_json_key(
+      j,
+      "signature",
+      p.signature,
+      "NativeFunctionHandle",
+      "Signature",
+      "signature");
+}
+
+void from_json(const json& j, NativeFunctionHandle& p) {
+  p._type = j["@type"];
+  from_json_key(
+      j,
+      "signature",
+      p.signature,
+      "NativeFunctionHandle",
+      "Signature",
+      "signature");
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
@@ -10674,8 +10674,6 @@ void to_json(json& j, const ScalarArgumentSpecification& p) {
       "ScalarArgumentSpecification",
       "bool",
       "required");
-  // Only include defaultValue if it's not empty
-  // Send as string - Java side will handle conversion
   if (!p.defaultValue.empty()) {
     j["defaultValue"] = p.defaultValue;
   }

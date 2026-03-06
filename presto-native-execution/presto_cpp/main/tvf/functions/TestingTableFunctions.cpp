@@ -29,7 +29,7 @@ std::unique_ptr<SimpleTableFunctionAnalysis> SimpleTableFunction::analyze(
   const auto arg = std::dynamic_pointer_cast<ScalarArgument>(args.at("COLUMN"));
   const auto val = arg->value()->as<ConstantVector<StringView>>()->valueAt(0);
 
-  returnNames.push_back(val);
+  returnNames.push_back(std::string(val));
   returnTypes.push_back(BOOLEAN());
 
   auto analysis = std::make_unique<SimpleTableFunctionAnalysis>();
@@ -42,10 +42,11 @@ std::unique_ptr<SimpleTableFunctionAnalysis> SimpleTableFunction::analyze(
 
 void registerSimpleTableFunction(const std::string& name) {
   TableArgumentSpecList argSpecs;
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      "COLUMN", VARCHAR(), true));
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      "IGNORED", BIGINT(), false));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>("COLUMN", VARCHAR(), true));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>(
+          "IGNORED", BIGINT(), false));
 
   registerTableFunction(
       name,
@@ -88,8 +89,9 @@ std::unique_ptr<IdentityFunctionAnalysis> IdentityFunction::analyze(
 
 void registerIdentityFunction(const std::string& name) {
   TableArgumentSpecList argSpecs;
-  argSpecs.push_back(std::make_shared<TableArgumentSpecification>(
-      "INPUT", false, false, true));
+  argSpecs.push_back(
+      std::make_shared<TableArgumentSpecification>(
+          "INPUT", false, false, true));
   registerTableFunction(
       name,
       argSpecs,
@@ -154,10 +156,11 @@ std::unique_ptr<RepeatFunctionAnalysis> RepeatFunction::analyze(
 
 void registerRepeatFunction(const std::string& name) {
   TableArgumentSpecList argSpecs;
-  argSpecs.push_back(std::make_shared<TableArgumentSpecification>(
-      "INPUT", false, false, true));
-  argSpecs.push_back(std::make_shared<ScalarArgumentSpecification>(
-      "COUNT", BIGINT(), true));
+  argSpecs.push_back(
+      std::make_shared<TableArgumentSpecification>(
+          "INPUT", false, false, true));
+  argSpecs.push_back(
+      std::make_shared<ScalarArgumentSpecification>("COUNT", BIGINT(), true));
   registerTableFunction(
       name,
       argSpecs,
