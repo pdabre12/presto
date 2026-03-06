@@ -90,11 +90,13 @@ public class NativeTVFProvider
         if (workerNodes.isEmpty()) {
             throw new IllegalStateException("No worker nodes available");
         }
+
         Node workerNode = Iterables.get(workerNodes, new Random().nextInt(workerNodes.size()));
+        URI workerHttpUri = workerNode.getHttpUri();
         return HttpUriBuilder.uriBuilder()
-                .scheme("http")
-                .host(workerNode.getHost())
-                .port(workerNode.getHostAndPort().getPort())
+                .scheme(workerHttpUri.getScheme())
+                .host(workerHttpUri.getHost())
+                .port(workerHttpUri.getPort())
                 .appendPath(endpoint)
                 .build();
     }
