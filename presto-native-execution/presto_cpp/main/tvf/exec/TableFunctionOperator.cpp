@@ -57,7 +57,7 @@ TableFunctionOperator::TableFunctionOperator(
           tableFunctionProcessorNode->id(),
           "TableFunctionOperator",
           tableFunctionProcessorNode->canSpill(driverCtx->queryConfig())
-              // check the operator type here
+              // check the operator type
               ? driverCtx->makeSpillConfig(operatorId, OperatorType::kRowNumber)
               : std::nullopt),
       pool_(pool()),

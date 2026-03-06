@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 
 import static com.facebook.airlift.http.client.JsonBodyGenerator.jsonBodyGenerator;
-import static com.facebook.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static com.facebook.airlift.http.client.Request.Builder.preparePost;
 import static com.facebook.presto.spi.StandardErrorCode.TABLE_FUNCTION_ANALYSIS_FAILED;
 import static com.facebook.presto.tvf.NativeTVFProvider.getWorkerLocation;
@@ -135,13 +134,11 @@ public class NativeConnectorTableFunction
         {
             try {
                 String body = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
-                
                 if (response.getStatusCode() != 200) {
                     // Extract just the "Reason:" line from Velox exception message
                     String errorMessage = extractReasonFromVeloxError(body);
                     throw new PrestoException(TABLE_FUNCTION_ANALYSIS_FAILED, errorMessage);
                 }
-                
                 return codec.fromJson(body).toTableFunctionAnalysis(typeManager);
             }
             catch (PrestoException e) {
