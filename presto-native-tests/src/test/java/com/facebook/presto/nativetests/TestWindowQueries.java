@@ -228,10 +228,4 @@ public class TestWindowQueries
                         "(INTERVAL '2' month, ARRAY[INTERVAL '1' month, INTERVAL '2' month]), " +
                         "(INTERVAL '5' year, ARRAY[INTERVAL '5' year])");
     }
-
-    // Crashes the worker when using native expression optimizer
-    @Override
-    @Test(enabled = false)
-    public void testRowFieldAccessorInWindowFunction()
-    {}
 }
