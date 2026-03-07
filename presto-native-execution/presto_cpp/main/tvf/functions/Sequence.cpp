@@ -127,7 +127,8 @@ class Sequence : public TableFunctionSplitProcessor {
       velox::memory::MemoryPool* pool,
       const SequenceHandle* handle)
       : TableFunctionSplitProcessor("sequence", pool, nullptr),
-        step_(handle->step()) {}
+        step_(handle->step()),
+        processed_(false) {}
 
   static std::unique_ptr<TableFunctionAnalysis> analyze(
       const std::unordered_map<std::string, std::shared_ptr<Argument>>& args) {
