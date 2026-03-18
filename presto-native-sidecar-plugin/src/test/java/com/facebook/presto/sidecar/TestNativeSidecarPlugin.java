@@ -61,6 +61,7 @@ import java.util.stream.Collectors;
 
 import static com.facebook.airlift.units.DataSize.Unit.MEGABYTE;
 import static com.facebook.presto.SystemSessionProperties.EXPRESSION_OPTIMIZER_NAME;
+import static com.facebook.presto.SystemSessionProperties.FIELD_NAMES_IN_JSON_CAST_ENABLED;
 import static com.facebook.presto.SystemSessionProperties.INLINE_SQL_FUNCTIONS;
 import static com.facebook.presto.SystemSessionProperties.KEY_BASED_SAMPLING_ENABLED;
 import static com.facebook.presto.SystemSessionProperties.REMOVE_MAP_CAST;
@@ -682,6 +683,7 @@ public class TestNativeSidecarPlugin
     {
         Session session = Session.builder(getSession())
                 .setSystemProperty(EXPRESSION_OPTIMIZER_NAME, "native")
+                .setSystemProperty(FIELD_NAMES_IN_JSON_CAST_ENABLED, "true")
                 .build();
 
         // When using the native expression optimizer, the resolved optimized expression may contain a FunctionHandle. It is important that the correct type of function handle is constructed.
@@ -733,6 +735,10 @@ public class TestNativeSidecarPlugin
         assertQuerySucceeds(session, "SELECT TRY(CAST(orderkey AS TINYINT)) FROM orders");
         assertQuerySucceeds(session, "SELECT TRY(CAST(comment AS BIGINT)) FROM orders");
         assertQuerySucceeds(session, "SELECT TRY(CAST(orderkey AS DOUBLE)) FROM orders");
+        // Test session properties propagating through the optimizer
+        assertEquals(
+                computeActual(session, "SELECT JSON_FORMAT(CAST(ROW(1 + 2, CONCAT('a', 'b')) AS JSON))"),
+                computeActual("select '{\"\":3,\"\":\"ab\"}'"));
     }
 
     // type of variable 'array_intersect' is expected to be array(varchar(6)), but the actual type is array(varchar)
