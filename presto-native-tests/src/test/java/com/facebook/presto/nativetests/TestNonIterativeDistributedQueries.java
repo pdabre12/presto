@@ -58,7 +58,7 @@ public class TestNonIterativeDistributedQueries
                 .setAddStorageFormatToPath(true)
                 .setUseThrift(true)
                 .setCoordinatorSidecarEnabled(sidecarEnabled)
-                .setPluginDirectory(sidecarEnabled ? Optional.of(getCustomFunctionsPluginDirectory().toString()) : Optional.empty())
+//                .setPluginDirectory(sidecarEnabled ? Optional.of(getCustomFunctionsPluginDirectory().toString()) : Optional.empty())
                 .setExtraProperties(ImmutableMap.of("experimental.iterative-optimizer-enabled", "false"))
                 .build();
         if (sidecarEnabled) {

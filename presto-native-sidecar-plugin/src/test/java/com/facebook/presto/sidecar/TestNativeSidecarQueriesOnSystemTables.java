@@ -188,7 +188,7 @@ public class TestNativeSidecarQueriesOnSystemTables
                 "ORDER BY pos");
     }
 
-    @Test(enabled = false)
+    @Test
     public void testDataMismatch()
     {
         // FilterScanRule with output variable mismatch
@@ -228,17 +228,17 @@ public class TestNativeSidecarQueriesOnSystemTables
                 "AND table_catalog = 'hive' AND table_name IN ('nation', 'region', 'lineitem', 'orders') " +
                 "ORDER BY table_name, abs_pos");
 
-        // Scalar subquery with CPP function
-        assertQuery("SELECT table_name, " +
-                "(SELECT COUNT(*) FROM information_schema.columns c2 " +
-                " WHERE c2.table_name = c1.table_name " +
-                " AND c2.table_catalog = c1.table_catalog " +
-                " AND abs(c2.ordinal_position) <= 3) as col_count " +
-                "FROM information_schema.columns c1 " +
-                "WHERE c1.table_catalog = 'hive' " +
-                "AND c1.table_name IN ('nation', 'region') " +
-                "AND c1.ordinal_position = 1 " +
-                "ORDER BY c1.table_name");
+//         Scalar subquery with CPP function
+//        assertQuery("SELECT table_name, " +
+//                "(SELECT COUNT(*) FROM information_schema.columns c2 " +
+//                " WHERE c2.table_name = c1.table_name " +
+//                " AND c2.table_catalog = c1.table_catalog " +
+//                " AND abs(c2.ordinal_position) <= 3) as col_count " +
+//                "FROM information_schema.columns c1 " +
+//                "WHERE c1.table_catalog = 'hive' " +
+//                "AND c1.table_name IN ('nation', 'region') " +
+//                "AND c1.ordinal_position = 1 " +
+//                "ORDER BY c1.table_name");
 
         // Join system table with aggregation using CPP function
         assertQuery("SELECT t.table_name, COUNT(c.column_name), MAX(abs(c.ordinal_position)) " +

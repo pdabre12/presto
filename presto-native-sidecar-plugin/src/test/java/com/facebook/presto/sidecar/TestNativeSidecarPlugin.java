@@ -53,6 +53,7 @@ import com.google.common.collect.Ordering;
 import org.intellij.lang.annotations.Language;
 import org.testng.annotations.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -891,7 +892,7 @@ public class TestNativeSidecarPlugin
     {
         // Invalid UUID. Note: This evaluates on the co-ordinator. This is used in subsequent SQL.
         assertQueryFails("SELECT cast('0E984725-C51C-4BF4-9960-H1C80E27ABA0' AS uuid)",
-                "(?s).*bad lexical cast: source type value could not be interpreted as target.*");
+                "(?s).*Cannot cast value to UUID: 0E984725-C51C-4BF4-9960-H1C80E27ABA0*");
         assertQuery("SELECT try_cast('0E984725-C51C-4BF4-9960-H1C80E27ABA0' AS uuid)");
 
         String tmpTableName = generateRandomTableName();
@@ -907,6 +908,39 @@ public class TestNativeSidecarPlugin
                 "(?s).*bad lexical cast: source type value could not be interpreted as target.*");
         assertQuery(format("SELECT try_cast(c_uuid AS uuid) FROM %s", tmpTableName));
         getQueryRunner().execute(format("DROP TABLE %s", tmpTableName));
+    }
+
+    @Test
+    public void testStructWithNulls()
+    {
+        String sql = "WITH lineitem_ex AS (\n" +
+                "    SELECT\n" +
+                "        orderkey,\n" +
+                "        CAST(\n" +
+                "            IF (\n" +
+                "                mod(partkey, 5) = 0,\n" +
+                "                NULL,\n" +
+                "                ROW(\n" +
+                "                    COMMENT,\n" +
+                "                    IF (\n" +
+                "                        mod(partkey, 13) = 0,\n" +
+                "                        NULL,\n" +
+                "                        CONCAT(CAST(partkey AS VARCHAR), COMMENT)\n" +
+                "                    )\n" +
+                "                )\n" +
+                "            ) AS ROW(s1 VARCHAR, s2 VARCHAR)\n" +
+                "        ) AS l_partkey_struct\n" +
+                "    FROM lineitem\n" +
+                ")\n" +
+                "SELECT\n" +
+                "    CHECKSUM(l.l_partkey_struct)\n" +
+                "FROM lineitem_ex l,\n" +
+                "    orders o\n" +
+                "WHERE\n" +
+                "    l.orderkey = o.orderkey";
+
+        computeActual(sql);
+        assertQuery(sql, Arrays.toString(new byte[] {67, 108, 83, 92, 16, -5, 66, 65}));
     }
 
     private String generateRandomTableName()
