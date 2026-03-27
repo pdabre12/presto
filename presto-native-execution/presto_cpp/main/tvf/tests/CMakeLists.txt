@@ -43,7 +43,6 @@ target_link_libraries(
   velox_vector
   velox_exec
   velox_memory
-  velox_exec
   GTest::gmock
   GTest::gtest
   GTest::gtest_main

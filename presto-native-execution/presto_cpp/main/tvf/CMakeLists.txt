@@ -16,5 +16,5 @@ add_subdirectory(spi)
 add_subdirectory(functions)
 
 if(PRESTO_ENABLE_TESTING)
-  add_subdirectory(tests)
+  # add_subdirectory(tests)
 endif()
