@@ -19,8 +19,6 @@ import com.facebook.presto.tests.AbstractTestQueryFramework;
 import com.facebook.presto.tvf.TvfPlugin;
 import org.testng.annotations.Test;
 
-import java.util.Optional;
-
 import static com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils.javaHiveQueryRunnerBuilder;
 import static com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils.nativeHiveQueryRunnerBuilder;
 import static com.facebook.presto.sidecar.NativeSidecarPluginQueryRunnerUtils.setupNativeSidecarPlugin;
@@ -196,4 +194,3 @@ public class TestNativeExcludeColumnsFunction
                         "t(orderkey, custkey, totalprice)");
     }
 }
-

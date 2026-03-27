@@ -34,7 +34,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,7 +54,6 @@ public class TableFunctionRegistry
     // catalog name in the original case; schema and function name in lowercase
     private final Map<ConnectorId, Map<SchemaFunctionName, TableFunctionMetadata>> tableFunctions = new ConcurrentHashMap<>();
     private final AtomicBoolean tvfProviderFunctionsLoaded = new AtomicBoolean(false);
-
 
     public void addTableFunctions(ConnectorId catalogName, Collection<ConnectorTableFunction> functions)
     {

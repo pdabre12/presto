@@ -658,4 +658,3 @@ public class TestDynamicTableFunctions
         throw new IllegalStateException("Could not locate presto root directory.");
     }
 }
-

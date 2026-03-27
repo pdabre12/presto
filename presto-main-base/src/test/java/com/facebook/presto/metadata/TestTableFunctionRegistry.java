@@ -67,8 +67,8 @@ public class TestTableFunctionRegistry
         // Verify table function resolution.
         assertNotNull(testFunctionRegistry.resolve(SESSION, QualifiedName.of(TEST_FUNCTION)));
         assertNotNull(testFunctionRegistry.resolve(SESSION, QualifiedName.of(TEST_FUNCTION_2)));
-        assertNotNull(testFunctionRegistry.resolve(SESSION, QualifiedName.of("none")));
-        assertNotNull(testFunctionRegistry.resolve(MISMATCH_SESSION, QualifiedName.of("none")));
+        assertNull(testFunctionRegistry.resolve(SESSION, QualifiedName.of("none")));
+        assertNull(testFunctionRegistry.resolve(MISMATCH_SESSION, QualifiedName.of("none")));
 
         // Verify metadata.
         TableFunctionMetadata data = testFunctionRegistry.resolve(SESSION, QualifiedName.of(TEST_FUNCTION));

@@ -16,10 +16,7 @@ package com.facebook.presto.nativetests;
 import com.facebook.presto.testing.ExpectedQueryRunner;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.AbstractTestQueryFramework;
-import com.facebook.presto.tvf.TvfPlugin;
 import org.testng.annotations.Test;
-
-import java.util.Optional;
 
 import static com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils.javaHiveQueryRunnerBuilder;
 import static com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils.nativeHiveQueryRunnerBuilder;
@@ -295,4 +292,3 @@ public class TestNativeSequenceFunction
                 format("SELECT %s, %s", start, Long.MAX_VALUE - 1));
     }
 }
-

@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 
 import static com.facebook.airlift.http.client.JsonBodyGenerator.jsonBodyGenerator;
-import static com.facebook.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static com.facebook.airlift.http.client.Request.Builder.preparePost;
 import static com.facebook.presto.spi.StandardErrorCode.TABLE_FUNCTION_ANALYSIS_FAILED;
 import static com.facebook.presto.tvf.NativeTVFProvider.getWorkerLocation;
@@ -111,7 +110,6 @@ public class NativeConnectorTableFunction
                 .setHeader(ACCEPT, JSON_UTF_8.toString())
                 .build();
     }
-
 
     private static class AnalyzeResponseHandler
             implements ResponseHandler<TableFunctionAnalysis, RuntimeException>
