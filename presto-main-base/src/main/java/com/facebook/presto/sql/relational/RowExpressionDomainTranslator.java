@@ -747,11 +747,11 @@ public final class RowExpressionDomainTranslator
 
         private ExtractionResult<T> visitBinaryLogic(SpecialFormExpression node, Boolean complement)
         {
-            ExtractionResult<T> leftResult = node.getArguments().get(0).accept(this, complement);
-            ExtractionResult<T> rightResult = node.getArguments().get(1).accept(this, complement);
-
-            TupleDomain<T> leftTupleDomain = leftResult.getTupleDomain();
-            TupleDomain<T> rightTupleDomain = rightResult.getTupleDomain();
+            // Collect all extraction results
+            List<ExtractionResult<T>> results = new ArrayList<>();
+            for (RowExpression argument : node.getArguments()) {
+                results.add(argument.accept(this, complement));
+            }
 
             Form operator = node.getForm();
             if (complement) {
@@ -768,12 +768,31 @@ public final class RowExpressionDomainTranslator
 
             switch (operator) {
                 case AND: {
+                    // Start with the first TupleDomain
+                    TupleDomain<T> intersectedTupleDomain = results.get(0).getTupleDomain();
+
+                    // Intersect all TupleDomains
+                    for (int i = 1; i < results.size(); i++) {
+                        intersectedTupleDomain = intersectedTupleDomain.intersect(results.get(i).getTupleDomain());
+                    }
+
+                    // Combine all remaining expressions with AND
+                    List<RowExpression> remainingExpressions = results.stream()
+                            .map(ExtractionResult::getRemainingExpression)
+                            .collect(toList());
+                    RowExpression combinedRemaining = logicalRowExpressions.combineConjuncts(remainingExpressions);
                     return new ExtractionResult<>(
-                            leftTupleDomain.intersect(rightTupleDomain),
-                            logicalRowExpressions.combineConjuncts(leftResult.getRemainingExpression(), rightResult.getRemainingExpression()));
+                            intersectedTupleDomain,
+                            logicalRowExpressions.combineConjuncts(combinedRemaining));
                 }
                 case OR: {
-                    TupleDomain<T> columnUnionedTupleDomain = TupleDomain.columnWiseUnion(leftTupleDomain, rightTupleDomain);
+                    // Start with the first result
+                    TupleDomain<T> columnUnionedTupleDomain = results.get(0).getTupleDomain();
+
+                    // Union all TupleDomains
+                    for (int i = 1; i < results.size(); i++) {
+                        columnUnionedTupleDomain = TupleDomain.columnWiseUnion(columnUnionedTupleDomain, results.get(i).getTupleDomain());
+                    }
 
                     // In most cases, the columnUnionedTupleDomain is only a superset of the actual strict union
                     // and so we can return the current node as the remainingExpression so that all bounds will be double checked again at execution time.
@@ -782,21 +801,35 @@ public final class RowExpressionDomainTranslator
                     // However, there are a few cases where the column-wise union is actually equivalent to the strict union, so we if can detect
                     // some of these cases, we won't have to double check the bounds unnecessarily at execution time.
 
-                    // We can only make inferences if the remaining expressions on both side are equal and deterministic
-                    if (leftResult.getRemainingExpression().equals(rightResult.getRemainingExpression()) &&
-                            determinismEvaluator.isDeterministic(leftResult.getRemainingExpression())) {
-                        // The column-wise union is equivalent to the strict union if
-                        // 1) If both TupleDomains consist of the same exact single column (e.g. left TupleDomain => (a > 0), right TupleDomain => (a < 10))
-                        // 2) If one TupleDomain is a superset of the other (e.g. left TupleDomain => (a > 0, b > 0 && b < 10), right TupleDomain => (a > 5, b = 5))
-                        boolean matchingSingleSymbolDomains = !leftTupleDomain.isNone()
-                                && !rightTupleDomain.isNone()
-                                && leftTupleDomain.getDomains().get().size() == 1
-                                && rightTupleDomain.getDomains().get().size() == 1
-                                && leftTupleDomain.getDomains().get().keySet().equals(rightTupleDomain.getDomains().get().keySet());
-                        boolean oneSideIsSuperSet = leftTupleDomain.contains(rightTupleDomain) || rightTupleDomain.contains(leftTupleDomain);
+                    RowExpression firstRemaining = results.get(0).getRemainingExpression();
+                    boolean allSameRemaining = results.stream()
+                            .allMatch(r -> r.getRemainingExpression().equals(firstRemaining));
 
-                        if (matchingSingleSymbolDomains || oneSideIsSuperSet) {
-                            remainingExpression = leftResult.getRemainingExpression();
+                    // We can only make inferences if the remaining expressions are equal and deterministic
+                    if (allSameRemaining && determinismEvaluator.isDeterministic(firstRemaining)) {
+                        // Check if all TupleDomains are for the same single column
+                        boolean allMatchingSingleColumn = results.stream()
+                                .allMatch(r -> !r.getTupleDomain().isNone()
+                                        && r.getTupleDomain().getDomains().isPresent()
+                                        && r.getTupleDomain().getDomains().get().size() == 1)
+                                && results.stream()
+                                .map(r -> r.getTupleDomain().getDomains().get().keySet())
+                                .distinct()
+                                .count() == 1;
+
+                        // Check if any TupleDomain is a superset of all others
+                        boolean oneSideIsSuperSet = false;
+                        for (ExtractionResult<T> result : results) {
+                            boolean isSuperSet = results.stream()
+                                    .allMatch(r -> result.getTupleDomain().contains(r.getTupleDomain()));
+                            if (isSuperSet) {
+                                oneSideIsSuperSet = true;
+                                break;
+                            }
+                        }
+
+                        if (allMatchingSingleColumn || oneSideIsSuperSet) {
+                            remainingExpression = firstRemaining;
                         }
                     }
 

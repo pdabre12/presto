@@ -14,17 +14,24 @@
 package com.facebook.presto.nativetests;
 
 import com.facebook.presto.testing.QueryRunner;
+import com.google.common.collect.ImmutableMap;
 import org.testng.annotations.BeforeClass;
 
+import java.util.Optional;
+
+import static com.facebook.presto.nativetests.TestCustomFunctions.buildNativeLibrary;
+import static com.facebook.presto.nativetests.TestCustomFunctions.getCustomFunctionsPluginDirectory;
 import static com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils.nativeHiveQueryRunnerBuilder;
 import static com.facebook.presto.sidecar.NativeSidecarPluginQueryRunnerUtils.setupNativeSidecarPlugin;
 import static java.lang.Boolean.parseBoolean;
 
-public class TestAggregations
-        extends AbstractTestAggregationsNative
+/**
+ * Test that Presto works with {@link com.facebook.presto.sql.planner.iterative.IterativeOptimizer} disabled.
+ */
+public class TestNonIterativeDistributedQueries
+        extends AbstractTestQueriesNative
 {
     private String storageFormat;
-    private boolean charNToVarcharImplicitCast;
     private boolean sidecarEnabled;
 
     @BeforeClass
@@ -32,24 +39,27 @@ public class TestAggregations
     public void init()
             throws Exception
     {
-        storageFormat = System.getProperty("storageFormat", "PARQUET");
+        storageFormat = System.getProperty("storageFormat", "DWRF");
         sidecarEnabled = parseBoolean(System.getProperty("sidecarEnabled", "false"));
-        charNToVarcharImplicitCast = getCharNToVarcharImplicitCastForTest(
-                sidecarEnabled, parseBoolean(System.getProperty("charNToVarcharImplicitCast", "false")));
-        super.init(storageFormat, charNToVarcharImplicitCast, sidecarEnabled);
+        // Ensure custom functions directory is present.
+        buildNativeLibrary();
+        super.init(sidecarEnabled);
         super.init();
     }
 
     @Override
-    protected QueryRunner createQueryRunner()
-            throws Exception
+    protected QueryRunner createQueryRunner() throws Exception
     {
+        /// Presto uses a rule-based iterative optimizer which is enabled by default and can be controlled with config
+        /// 'experimental.iterative-optimizer-enabled'. Tests Presto C++ worker by disabling the iterative optimizer,
+        /// resulting in possibly different query plans.
         QueryRunner queryRunner = nativeHiveQueryRunnerBuilder()
                 .setStorageFormat(storageFormat)
                 .setAddStorageFormatToPath(true)
                 .setUseThrift(true)
-                .setImplicitCastCharNToVarchar(charNToVarcharImplicitCast)
                 .setCoordinatorSidecarEnabled(sidecarEnabled)
+//                .setPluginDirectory(sidecarEnabled ? Optional.of(getCustomFunctionsPluginDirectory().toString()) : Optional.empty())
+                .setExtraProperties(ImmutableMap.of("experimental.iterative-optimizer-enabled", "false"))
                 .build();
         if (sidecarEnabled) {
             setupNativeSidecarPlugin(queryRunner);

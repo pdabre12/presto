@@ -103,20 +103,24 @@ public final class LogicalRowExpressions
     {
         if (expression instanceof SpecialFormExpression && ((SpecialFormExpression) expression).getForm() == form) {
             SpecialFormExpression specialFormExpression = (SpecialFormExpression) expression;
-            if (specialFormExpression.getArguments().size() == 2) {
-                List<RowExpression> predicates = new ArrayList<>();
-                predicates.addAll(extractPredicates(form, specialFormExpression.getArguments().get(0)));
-                predicates.addAll(extractPredicates(form, specialFormExpression.getArguments().get(1)));
-                return unmodifiableList(predicates);
-            }
-            if (specialFormExpression.getArguments().size() == 1 && form == IS_NULL) {
+            List<RowExpression> arguments = specialFormExpression.getArguments();
+
+            if (arguments.size() == 1 && form == IS_NULL) {
                 return singletonList(expression);
+            }
+
+            if (arguments.size() >= 2) {
+                List<RowExpression> predicates = new ArrayList<>();
+                for (RowExpression argument : arguments) {
+                    predicates.addAll(extractPredicates(form, argument));
+                }
+                return unmodifiableList(predicates);
             }
             throw new IllegalStateException("Unexpected operands:" + expression + " " + form);
         }
-
         return singletonList(expression);
     }
+
 
     public static RowExpression and(RowExpression... expressions)
     {
@@ -466,14 +470,21 @@ public final class LogicalRowExpressions
                 return specialForm;
             }
 
-            RowExpression left = specialForm.getArguments().get(0);
-            RowExpression right = specialForm.getArguments().get(1);
+            List<RowExpression> arguments = specialForm.getArguments();
+            if (arguments.size() < 2) {
+                throw new IllegalStateException("AND/OR expression must have at least 2 arguments");
+            }
+
+            List<RowExpression> processedArguments = arguments.stream()
+                    .map(arg -> arg.accept(this, null))
+                    .collect(toList());
 
             if (specialForm.getForm() == AND) {
-                return and(left.accept(this, null), right.accept(this, null));
+                return and(processedArguments);
             }
-            return or(left.accept(this, null), right.accept(this, null));
+            return or(processedArguments);
         }
+
 
         @Override
         public RowExpression visitInputReference(InputReferenceExpression reference, Void context)
