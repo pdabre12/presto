@@ -69,10 +69,10 @@
       "docString": "presto.default.combinations",
       "functionKind": "SCALAR",
       "isRpcFunction": false,
-      "longVariableConstraints": [],
-      "outputType": "array(array(varchar))",
+      "longVariableConstraints":[],
+      "outputType": "array(array(varchar(i10)))",
       "paramTypes": [
-        "array(varchar)",
+        "array(varchar(i10))",
         "integer"
       ],
       "routineCharacteristics": {
