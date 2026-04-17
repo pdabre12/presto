@@ -63,6 +63,7 @@ public class NativeQueryRunnerUtils
                 .put("presto.default-namespace", "native.default")
                 // inline-sql-functions is overridden to be true in sidecar enabled native clusters.
                 .put("inline-sql-functions", "true")
+                .put("expression-optimizer-name", "native")
                 .build();
     }
 
