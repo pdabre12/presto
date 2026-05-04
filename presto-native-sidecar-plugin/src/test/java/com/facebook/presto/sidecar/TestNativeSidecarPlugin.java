@@ -264,7 +264,7 @@ public class TestNativeSidecarPlugin
                 "date_trunc('hour', from_unixtime(orderkey, '-09:30')), date_trunc('minute', from_unixtime(orderkey, '+05:30')), " +
                 "date_trunc('second', from_unixtime(orderkey, '+00:00')) FROM orders");
         assertQuery("SELECT mod(orderkey, linenumber) FROM lineitem");
-        assertQueryFails("SELECT IF(true, 0/0, 1)", "/ by zero", true);
+        assertQueryFails("SELECT IF(true, 0/0, 1)", "division by zero", true);
         assertQuery("select CASE WHEN true THEN 'Yes' ELSE 'No' END");
     }
 
@@ -868,7 +868,7 @@ public class TestNativeSidecarPlugin
                         "   select CAST(null AS KHYPERLOGLOG) khll" +
                         ")");
     }
-    
+
     @Test
     public void testQueriesUsingBoundedVarchar()
     {
