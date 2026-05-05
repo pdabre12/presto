@@ -184,6 +184,8 @@ public class PrestoSparkQueryRunner
 
     private final NodeManager nodeManager;
 
+    private final ExpressionOptimizerManager expressionOptimizerManager;
+
     protected static final MetastoreContext METASTORE_CONTEXT = new MetastoreContext("test_user", "test_queryId", Optional.empty(), Collections.emptySet(), Optional.empty(), Optional.empty(), false, HiveColumnConverterProvider.DEFAULT_COLUMN_CONVERTER_PROVIDER, WarningCollector.NOOP, new RuntimeStats());
 
     public static PrestoSparkQueryRunner createHivePrestoSparkQueryRunner()
@@ -370,6 +372,7 @@ public class PrestoSparkQueryRunner
         prestoSparkService = injector.getInstance(PrestoSparkService.class);
         testingAccessControlManager = injector.getInstance(TestingAccessControlManager.class);
         nodeManager = injector.getInstance(PluginNodeManager.class);
+        expressionOptimizerManager = injector.getInstance(ExpressionOptimizerManager.class);
 
         // Install tpch Plugin
         pluginManager.installPlugin(new TpchPlugin());
@@ -534,7 +537,7 @@ public class PrestoSparkQueryRunner
     @Override
     public ExpressionOptimizerManager getExpressionManager()
     {
-        throw new UnsupportedOperationException();
+        return expressionOptimizerManager;
     }
 
     public HistoryBasedPlanStatisticsManager getHistoryBasedPlanStatisticsManager()
