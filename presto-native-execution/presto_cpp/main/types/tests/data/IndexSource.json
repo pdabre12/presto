@@ -99,7 +99,7 @@
         "name<varchar(25)>":{
           "@type":"hive",
           "name":"name",
-          "hiveType":"string",
+          "hiveType":"varchar(25)",
           "typeSignature":"varchar(25)",
           "hiveColumnIndex":1,
           "columnType":"REGULAR",
