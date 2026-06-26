@@ -33,6 +33,7 @@ import static com.facebook.presto.SystemSessionProperties.REMOVE_MAP_CAST;
 import static com.facebook.presto.flightshim.NativeArrowFederationConnectorUtils.buildCatalogsMap;
 import static com.facebook.presto.flightshim.NativeArrowFederationConnectorUtils.getFlightServerShimConfig;
 import static com.facebook.presto.tests.QueryAssertions.assertEqualsIgnoreOrder;
+import static java.lang.Boolean.parseBoolean;
 
 // todo: Remove test cases from this file and inherit from AbstractTestQueriesNative when https://github.com/prestodb/presto/pull/27849 goes in
 @Test(singleThreaded = true)
@@ -44,6 +45,7 @@ public abstract class AbstractTestArrowFederationNativeQueries
     protected BufferAllocator allocator;
     protected FlightShimProducer producer;
     protected FlightServer server;
+    protected boolean sidecarEnabled;
 
     @BeforeClass
     @Override
@@ -54,6 +56,7 @@ public abstract class AbstractTestArrowFederationNativeQueries
         server = FlightShimServer.start(injector, FlightServer.builder(), buildCatalogsMap(getCatalogPropertiesMap()));
         allocator = injector.getInstance(BufferAllocator.class);
         producer = injector.getInstance(FlightShimProducer.class);
+        sidecarEnabled = parseBoolean(System.getProperty("sidecarEnabled", "false"));
         super.init();
     }
 

@@ -237,6 +237,7 @@ jobs:
         modules:
           - :presto-base-arrow-flight
           - :presto-flight-shim
+        enable-sidecar: [true, false]
 
     timeout-minutes: 80
     concurrency:
@@ -322,6 +323,7 @@ jobs:
             ${MAVEN_TEST} \
             -pl ${{ matrix.modules }} \
             -Dtest="TestArrowFlightNativeQueries*,TestArrowFederationNativeQueries*" \
+            -DsidecarEnabled=${{ matrix.enable-sidecar }} \
             -DPRESTO_SERVER=${PRESTO_SERVER_PATH} \
             -DDATA_DIR=${RUNNER_TEMP} \
             -Duser.timezone=America/Bahia_Banderas \
