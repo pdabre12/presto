@@ -9626,7 +9626,8 @@ static const std::pair<RPCNodeStreamingMode, json>
     RPCNodeStreamingMode_enum_table[] =
         { // NOLINT: cert-err58-cpp
             {RPCNodeStreamingMode::PER_ROW, "PER_ROW"},
-            {RPCNodeStreamingMode::BATCH, "BATCH"}};
+            {RPCNodeStreamingMode::BATCH, "BATCH"},
+            {RPCNodeStreamingMode::AUTOMATIC, "AUTOMATIC"}};
 void to_json(json& j, const RPCNodeStreamingMode& e) {
   static_assert(
       std::is_enum<RPCNodeStreamingMode>::value,

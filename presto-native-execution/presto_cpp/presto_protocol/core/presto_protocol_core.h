@@ -2186,7 +2186,7 @@ void to_json(json& j, const ProjectNode& p);
 void from_json(const json& j, ProjectNode& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-enum class RPCNodeStreamingMode { PER_ROW, BATCH };
+enum class RPCNodeStreamingMode { PER_ROW, BATCH, AUTOMATIC };
 extern void to_json(json& j, const RPCNodeStreamingMode& e);
 extern void from_json(const json& j, RPCNodeStreamingMode& e);
 } // namespace facebook::presto::protocol

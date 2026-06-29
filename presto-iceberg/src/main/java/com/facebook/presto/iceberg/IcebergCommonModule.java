@@ -44,6 +44,7 @@ import com.facebook.presto.hive.gcs.HiveGcsConfigurationInitializer;
 import com.facebook.presto.hive.metastore.InvalidateMetastoreCacheProcedure;
 import com.facebook.presto.iceberg.nessie.IcebergNessieConfig;
 import com.facebook.presto.iceberg.optimizer.IcebergPlanOptimizerProvider;
+import com.facebook.presto.iceberg.procedure.CopyDataFilesProcedure;
 import com.facebook.presto.iceberg.procedure.ExpireSnapshotsProcedure;
 import com.facebook.presto.iceberg.procedure.FastForwardBranchProcedure;
 import com.facebook.presto.iceberg.procedure.ManifestFileCacheInvalidationProcedure;
@@ -197,6 +198,7 @@ public class IcebergCommonModule
         procedures.addBinding().toProvider(ManifestFileCacheInvalidationProcedure.class).in(Scopes.SINGLETON);
         procedures.addBinding().toProvider(RewriteDataFilesProcedure.class).in(Scopes.SINGLETON);
         procedures.addBinding().toProvider(RewriteManifestsProcedure.class).in(Scopes.SINGLETON);
+        procedures.addBinding().toProvider(CopyDataFilesProcedure.class).in(Scopes.SINGLETON);
         if (buildConfigObject(MetastoreClientConfig.class).isInvalidateMetastoreCacheProcedureEnabled()) {
             procedures.addBinding().toProvider(InvalidateMetastoreCacheProcedure.class).in(Scopes.SINGLETON);
         }

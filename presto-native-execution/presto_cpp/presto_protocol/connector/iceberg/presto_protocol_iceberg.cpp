@@ -1241,6 +1241,13 @@ void to_json(json& j, const IcebergDistributedProcedureHandle& p) {
       "sortOrder");
   to_json_key(
       j,
+      "fileName",
+      p.fileName,
+      "IcebergDistributedProcedureHandle",
+      "String",
+      "fileName");
+  to_json_key(
+      j,
       "relevantData",
       p.relevantData,
       "IcebergDistributedProcedureHandle",
@@ -1327,6 +1334,13 @@ void from_json(const json& j, IcebergDistributedProcedureHandle& p) {
       "IcebergDistributedProcedureHandle",
       "List<SortField>",
       "sortOrder");
+  from_json_key(
+      j,
+      "fileName",
+      p.fileName,
+      "IcebergDistributedProcedureHandle",
+      "String",
+      "fileName");
   from_json_key(
       j,
       "relevantData",

@@ -373,7 +373,8 @@ IcebergPrestoToVeloxConnector::toVeloxInsertTableHandle(
       std::make_shared<velox::connector::hive::LocationHandle>(
           fmt::format("{}/data", icebergDistributedProcedureHandle->outputPath),
           fmt::format("{}/data", icebergDistributedProcedureHandle->outputPath),
-          velox::connector::hive::LocationHandle::TableType::kExisting),
+          velox::connector::hive::LocationHandle::TableType::kExisting,
+          icebergDistributedProcedureHandle->fileName),
       toVeloxFileFormat(icebergDistributedProcedureHandle->fileFormat),
       toVeloxIcebergPartitionSpec(
           icebergDistributedProcedureHandle->partitionSpec, typeParser),
