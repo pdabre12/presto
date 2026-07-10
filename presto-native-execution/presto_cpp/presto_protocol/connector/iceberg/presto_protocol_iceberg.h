@@ -280,6 +280,7 @@ struct IcebergDistributedProcedureHandle
   Map<String, String> storageProperties = {};
   IcebergTableLayoutHandle tableLayoutHandle = {};
   List<SortField> sortOrder = {};
+  String fileName = {};
   Map<String, String> relevantData = {};
 
   IcebergDistributedProcedureHandle() noexcept;

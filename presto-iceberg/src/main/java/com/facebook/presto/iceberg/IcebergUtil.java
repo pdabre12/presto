@@ -1914,4 +1914,20 @@ public final class IcebergUtil
                     (maxFileSizeBytes > 0 && fileSize > maxFileSizeBytes);
         });
     }
+
+    /**
+     * Filters to a single specific file by path.
+     * Returns only the FileScanTask matching the exact file path.
+     *
+     * @param tasks all available file scan tasks
+     * @param sourceFilePath the exact file path to filter to
+     * @return filtered iterable containing only the specified file, or empty if not found
+     */
+    public static CloseableIterable<FileScanTask> filterByFilePath(
+            CloseableIterable<FileScanTask> tasks,
+            String sourceFilePath)
+    {
+        return CloseableIterable.filter(tasks, task ->
+                task.file().location().equals(sourceFilePath));
+    }
 }
