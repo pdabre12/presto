@@ -136,6 +136,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.HOURS;
+import static java.util.stream.Collectors.partitioningBy;
 
 /**
  * TODO: This should not extend from FunctionMetadataManager and TypeManager
@@ -532,7 +533,19 @@ public class FunctionAndTypeManager
 
     public void registerPluginFunctions(List<? extends SqlFunction> functions)
     {
-        builtInPluginFunctionNamespaceManager.registerBuiltInSpecialFunctions(functions);
+        Map<Boolean, List<SqlFunction>> functionsByNamespace = functions.stream()
+                .collect(partitioningBy(function -> function.getSignature().getName().getCatalogSchemaName().equals(JAVA_BUILTIN_NAMESPACE)));
+
+        List<SqlFunction> builtInFunctionList = functionsByNamespace.get(true);
+        List<SqlFunction> pluginFunctionList = functionsByNamespace.get(false);
+
+        if (!builtInFunctionList.isEmpty()) {
+            builtInTypeAndFunctionNamespaceManager.registerBuiltInFunctions(builtInFunctionList);
+        }
+
+        if (!pluginFunctionList.isEmpty()) {
+            builtInPluginFunctionNamespaceManager.registerBuiltInSpecialFunctions(pluginFunctionList);
+        }
     }
 
     public void registerConnectorFunctions(String catalogName, List<? extends SqlFunction> functions)

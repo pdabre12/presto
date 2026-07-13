@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.sidecar;
 
+import com.facebook.presto.common.QualifiedObjectName;
 import com.facebook.presto.common.type.TypeSignature;
 import com.facebook.presto.common.type.TypeSignatureParameter;
 import com.facebook.presto.metadata.FunctionAndTypeManager;
@@ -20,17 +21,26 @@ import com.facebook.presto.ml.MLPlugin;
 import com.facebook.presto.ml.type.ClassifierParametricType;
 import com.facebook.presto.mongodb.MongoPlugin;
 import com.facebook.presto.nativeworker.PrestoNativeQueryRunnerUtils;
+import com.facebook.presto.spi.function.SqlFunction;
+import com.facebook.presto.testing.MaterializedResult;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.AbstractTestQueryFramework;
 import com.facebook.presto.tests.DistributedQueryRunner;
 import org.testng.annotations.Test;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
 import static com.facebook.presto.common.type.BigintType.BIGINT;
+import static com.facebook.presto.metadata.BuiltInTypeAndFunctionNamespaceManager.JAVA_BUILTIN_NAMESPACE;
 import static com.facebook.presto.mongodb.ObjectIdType.OBJECT_ID;
 import static com.facebook.presto.sidecar.NativeSidecarPluginQueryRunnerUtils.setupNativeSidecarPlugin;
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-public class TestNativeSidecarWithPluginLoadedTypes
+public class TestNativeSidecarPluginLoadedTypesAndFunctions
         extends AbstractTestQueryFramework
 {
     @Override
@@ -57,5 +67,30 @@ public class TestNativeSidecarWithPluginLoadedTypes
                 ClassifierParametricType.NAME,
                 TypeSignatureParameter.of(BIGINT.getTypeSignature()));
         assertTrue(functionAndTypeManager.hasType(classifierSignature));
+    }
+
+    @Test
+    public void testFunctionsLoaded()
+    {
+        // ML plugin functions
+        MaterializedResult functions = computeActual("SHOW FUNCTIONS LIKE 'classify'");
+        assertTrue(functions.getMaterializedRows().stream()
+                .anyMatch(row -> row.getField(0).equals("classify") && row.getField(3).equals("scalar")));
+
+        FunctionAndTypeManager functionAndTypeManager = getQueryRunner().getMetadata().getFunctionAndTypeManager();
+
+        Collection<? extends SqlFunction> nativeClassifyFunctions = functionAndTypeManager
+                .getBuiltInPluginFunctionNamespaceManager()
+                .getFunctions(Optional.empty(), QualifiedObjectName.valueOf(functionAndTypeManager.getDefaultNamespace(), "classify"));
+        assertFalse(nativeClassifyFunctions.isEmpty());
+
+        List<? extends SqlFunction> mongoCastOperators = functionAndTypeManager.listOperators().stream()
+                .filter(function -> function.getSignature().getName().getCatalogSchemaName().equals(JAVA_BUILTIN_NAMESPACE))
+                .filter(function -> function.getSignature().getArgumentTypes().size() == 1)
+                .filter(function -> function.getSignature().getArgumentTypes().get(0).equals(OBJECT_ID.getTypeSignature()))
+                .filter(function -> function.getSignature().getReturnType().toString().startsWith("varchar"))
+                .collect(toImmutableList());
+
+        assertFalse(mongoCastOperators.isEmpty());
     }
 }

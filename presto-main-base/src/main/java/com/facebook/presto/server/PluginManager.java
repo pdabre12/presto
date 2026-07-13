@@ -231,7 +231,8 @@ public class PluginManager
 
         for (Class<?> functionClass : plugin.getFunctions()) {
             log.info("Registering functions from %s", functionClass.getName());
-            metadata.registerBuiltInFunctions(extractFunctions(functionClass));
+            metadata.getFunctionAndTypeManager().registerPluginFunctions(
+                    extractFunctions(functionClass, metadata.getFunctionAndTypeManager().getDefaultNamespace()));
         }
 
         for (FunctionNamespaceManagerFactory functionNamespaceManagerFactory : plugin.getFunctionNamespaceManagerFactories()) {

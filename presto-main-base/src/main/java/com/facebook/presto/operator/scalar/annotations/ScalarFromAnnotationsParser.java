@@ -43,7 +43,6 @@ import static com.facebook.presto.operator.scalar.annotations.OperatorValidator.
 import static com.facebook.presto.spi.StandardErrorCode.FUNCTION_IMPLEMENTATION_ERROR;
 import static com.facebook.presto.util.Failures.checkCondition;
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 public final class ScalarFromAnnotationsParser
@@ -108,7 +107,8 @@ public final class ScalarFromAnnotationsParser
             checkCondition((method.getAnnotation(ScalarFunction.class) != null) || (method.getAnnotation(ScalarOperator.class) != null),
                     FUNCTION_IMPLEMENTATION_ERROR, "Method [%s] annotated with @SqlType is missing @ScalarFunction or @ScalarOperator", method);
             if (method.getAnnotation(ScalarOperator.class) != null) {
-                checkArgument(functionNamespace.equals(JAVA_BUILTIN_NAMESPACE), format("Connector specific Scalar operator functions are not supported: Class [%s], Namespace [%s]", annotated.getName(), functionNamespace));
+                // Always register @ScalarOperator functions under JAVA_BUILTIN_NAMESPACE.
+                functionNamespace = JAVA_BUILTIN_NAMESPACE;
             }
             for (ScalarImplementationHeader header : ScalarImplementationHeader.fromAnnotatedElement(method, functionNamespace)) {
                 builder.add(new ScalarHeaderAndMethods(header, ImmutableSet.of(method)));

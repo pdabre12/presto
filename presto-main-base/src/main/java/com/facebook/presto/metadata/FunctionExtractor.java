@@ -73,8 +73,8 @@ public final class FunctionExtractor
             return ScalarFromAnnotationsParser.parseFunctionDefinition(clazz, defaultNamespace);
         }
         if (clazz.isAnnotationPresent(ScalarOperator.class)) {
-            checkArgument(defaultNamespace.equals(JAVA_BUILTIN_NAMESPACE), format("Connector specific Scalar Operator functions are not supported: Class [%s], Namespace [%s]", clazz.getName(), defaultNamespace));
-            return ScalarFromAnnotationsParser.parseFunctionDefinition(clazz);
+            // Always register @ScalarOperator functions under JAVA_BUILTIN_NAMESPACE.
+            return ScalarFromAnnotationsParser.parseFunctionDefinition(clazz, JAVA_BUILTIN_NAMESPACE);
         }
 
         if (clazz.isAnnotationPresent(SqlInvokedScalarFunction.class)) {
