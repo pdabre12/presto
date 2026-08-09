@@ -268,6 +268,7 @@ public class RewriteDataFilesProcedure
                     icebergTable.properties(),
                     layoutHandle,
                     sortFields,
+                    "",
                     ImmutableMap.of());
         }
     }

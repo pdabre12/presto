@@ -29,6 +29,7 @@ public class IcebergDistributedProcedureHandle
 {
     private final IcebergTableLayoutHandle tableLayoutHandle;
     private final Map<String, String> relevantData;
+    private final String fileName;
 
     @JsonCreator
     public IcebergDistributedProcedureHandle(
@@ -43,6 +44,7 @@ public class IcebergDistributedProcedureHandle
             @JsonProperty("storageProperties") Map<String, String> storageProperties,
             @JsonProperty("tableLayoutHandle") IcebergTableLayoutHandle tableLayoutHandle,
             @JsonProperty("sortOrder") List<SortField> sortOrder,
+            @JsonProperty("fileName") String fileName,
             @JsonProperty("relevantData") Map<String, String> relevantData)
     {
         super(
@@ -58,6 +60,8 @@ public class IcebergDistributedProcedureHandle
                 sortOrder);
         this.tableLayoutHandle = requireNonNull(tableLayoutHandle, "tableLayoutHandle is null");
         this.relevantData = requireNonNull(relevantData, "relevantData is null");
+        // Use fileName when it's provided else generate a new unique fileName
+        this.fileName = requireNonNull(fileName, "fileName is null");
     }
 
     @JsonProperty
@@ -70,5 +74,11 @@ public class IcebergDistributedProcedureHandle
     public Map<String, String> getRelevantData()
     {
         return relevantData;
+    }
+
+    @JsonProperty
+    public String getFileName()
+    {
+        return fileName;
     }
 }
